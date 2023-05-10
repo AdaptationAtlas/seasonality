@@ -59,9 +59,9 @@ if(!file.exists(File)){
          LTAVg_Data=SOS_Data$LTAVg_Data,
          LTAVg_Summary=SOS_Data$LTAVg_Summary)
   })
-  
+
   names(SOSlist)<-SOSFiles$Country
-  
+
   save(SOSlist,file=File)
 }else{
   load(File)
@@ -82,7 +82,7 @@ MinRain_multimode<-0 # Minimum seasonal rainfall allowed (seasons are subset aft
 SeasonGapT<-3 # if the gap between seasons is <=SeasonGapT then it is considered as a split season (i.e. bimodal)
 
 SubsetLTSeasons<-T # If T then the subsetLTseasons is applied to the long-term climate data to select only two seasons based on LGP
-PlotDir1<-paste0(AnalysisDir,"/Plots/ML",MinLength,"-MR",MinRain,"-SG",SeasonGapT)
+PlotDir1<-paste0(AnalysisDir,"/Plots/ML",MinLength,"-MR",MinRain,"-SG",SeasonGapT,"_MLmm",MinLength_multimode,"_MRmm",MinRain_multimode)
 
 # The code will modify EOS, SOS and LGP according to SeasonGapT and attempt to tidy seasonal organization between S1 and S2
 
@@ -95,14 +95,14 @@ if(!dir.exists(PlotDir)){
 
 for(COUNTRY in Countries){
   print(COUNTRY)
-  
+
   Map.Subset<-AfricaMap[AfricaMap$ADMIN==COUNTRY,]
-  
+
    SOSData1<-data.table::copy(SOSlist[[COUNTRY]]$LTAVg_Summary)
-   
+
    # Seasons with insufficient length or rainfall are removed before any assignment of multimodality.
    SOSData1<-SOSData1[LGP>=MinLength & Tot.Rain>MinRain]
-   
+
    # Assign multimodality
    SOSData1[,DistForward:=SOS_dist(SOS,EOS),by=Index # Calculate distance between SOS and EOS for each rainy sequence at a location
             ][,Multimodal:=SOS_multimodes(DistForward,SeasonGapT),by=Index # Are there multimodal sequences?
@@ -110,44 +110,44 @@ for(COUNTRY in Countries){
                 ][Multimodal==T,Seq_1:=Seq_1[1],by=Index # Recode sequence for multimodal systems
                   ][,SOS_1:= SOS_recode_events(Seq_1,SOS,forward=T),by=Index # Reassign SOS for multimodal sequences
                       ][,EOS_1:= SOS_recode_events(Seq_1,EOS,forward=F),by=Index # Reassign EOS for multimodal sequences
-                        ][,LGP_1_sum:=sum(LGP),by=list(Index,Seq_1) # Sum LGP for multimodal sequences (does not include gaps) 
+                        ][,LGP_1_sum:=sum(LGP),by=list(Index,Seq_1) # Sum LGP for multimodal sequences (does not include gaps)
                           ][SOS_1<EOS_1,LGP_1_calc:=EOS_1-SOS_1 # Length of growing period (LGP) is SOS less EOS
                              ][SOS_1>EOS_1,LGP_1_calc:=36-SOS_1+EOS_1 # Deal with scenario where SOS is in different year to EOS
                                ][,Tot.Rain_1:=sum(Tot.Rain),by=list(Index,Seq_1) # Note this does not include the arid gaps between multimodal seasons
                                  ][,Tot.ETo_1:=sum(Tot.ETo),by=list(Index,Seq_1) # Note this does not include the arid gaps between multimodal seasons
                                    ][,Balance_1:=Tot.Rain_1-Tot.ETo_1,by=list(Index,Seq_1) # Note this does not include the arid gaps between multimodal seasons
                                       ][,Modes:=.N,by=list(Index,Seq_1)]
-   
+
    # Seasons with insufficient length or rainfall are removed after assignment of multimodality.
    SOSData1<-SOSData1[LGP_1_calc>=MinLength_multimode & Tot.Rain_1>MinRain_multimode]
-   
+
    # If more than 2 seasons are present (considering multimodal systems) then should only two be retained?
    if(SubsetLTSeasons){
      SOSData1<-SOSData1[,Keep:=SOS_subset_LT_seasons(Seq_1,Tot.Rain_1,SOS),by=Index
                         ][Keep==T
                           ][,Keep:=NULL]
    }
-   
+
    # To account for deleted sequences recode sequences to be sequential, for example c(1,3,3,5) becomes c(1,2,2,3)
    SOSData1[,Seq_1:=SOS_recode_seq(Seq_1),by=Index
             ][,Seasons_1:=length(unique(Seq_1)),by=Index]
-   
+
    # Load country raster
   CHIRPS_Ref<-terra::rast(paste0(CHIRPS_Dekad_Dir,"/",COUNTRY,".tif"))[[1]]
   CHIRPS_Ref<-data.table(terra::as.data.frame(CHIRPS_Ref,xy=T,cells=T))[,1:3]
   setnames(CHIRPS_Ref,"cell","Index")
-  
+
   SOSData1<-merge(CHIRPS_Ref,SOSData1,by="Index",all.x=F)
-  
+
   # Merge sequence functions needs to be applied here
   SOSData<-unique(SOSData1[,list(Index,x,y,Modes,Seq_1,SOS_1,EOS_1,LGP_1_calc,Tot.Rain_1,Tot.ETo_1,Balance_1,Seasons_1)])
   colnames(SOSData)<-gsub("_1","",colnames(SOSData))
   colnames(SOSData)<-gsub("_calc","",colnames(SOSData))
   SOSData<-dcast(SOSData,Index+x+y+Seasons~Seq,value.var = c("SOS","EOS","LGP","Tot.Rain","Tot.ETo","Balance","Modes"))
-  
+
   if(SOSData[,!any(Seasons==2)]){
     SEASONS<-list(S1=OrderDekadSeq(unique(round(SOSData$SOS_1))),S2=NULL)
-    
+
     SOSData[,S1:=round(SOS_1,0)
             ][,S2:=NA
               ][S1==0,S1:=36
@@ -162,10 +162,10 @@ for(COUNTRY in Countries){
                                 ][,Tot.ETo1:=Tot.ETo_1
                                   ][,c("LGP2","SOS_2","EOS_2","Balance2","Modes2","Tot.Rain2","Tot.ETo2","LGP_2","Tot.Rain_2","Tot.ETo_2","Balance_2","Modes_2"):=NA]
   }else{
-    
+
     if(SOSData[,!any(Seasons==1)]){
       SEASONS<-list(S1=OrderDekadSeq(unique(round(SOSData$SOS_2))),S2=NULL)
-      
+
       SOSData[,S1:=round(SOS_2,0)
               ][,S2:=NA
                 ][S1==0,S1:=36
@@ -180,8 +180,8 @@ for(COUNTRY in Countries){
                                ][,Tot.ETo1:=Tot.ETo_2
                                 ][,c("LGP2","SOS_2","EOS_2","Balance2","Modes2","Tot.Rain2","Tot.ETo2","LGP_2","Tot.Rain_2","Tot.ETo_2","Balance_2","Modes_2"):=NA]
     }else{
-      
-      
+
+
       # Use multimode function to determine seasons from the distribution of SOS values (from all cells and both seasons combined)
       # This approach doesn't work well for some countries and seasons are specified manually
      if(F){
@@ -193,7 +193,7 @@ for(COUNTRY in Countries){
         Left<-if(Modes[1]==1){NULL}else{1:(Modes[1]-1)}
         Right<-if(Modes[3]==36){NULL}else{(Modes[3]+1):36}
         Rem<-c(Right,Left)
-        
+
         if(length(Rem) %% 2 == 0){
           S2<-c(S2,Rem[1:(length(Rem)/2)])
           S1<-c(Rem[(1+(length(Rem)/2)):length(Rem)],S1)
@@ -203,9 +203,9 @@ for(COUNTRY in Countries){
         }
       }
      }
-        
+
         SEASONS<-list(S1=S1,S2=S2)
-      
+
       if(F){
       if(COUNTRY=="Kenya"){
         SEASONS<-list(S1=c(35:36,1:15),S2=16:34)
@@ -217,7 +217,7 @@ for(COUNTRY in Countries){
         SEASONS<-list(S1=1:36,S2=NULL)
       }
       }
-      
+
       SOSData[,S1:=SOS_1
       ][,X1:=as.numeric(NA)
       ][,S2:=SOS_2
@@ -227,10 +227,10 @@ for(COUNTRY in Countries){
       ][S2 %in% SEASONS$S1,X1:=S2
       ][S2 %in% SEASONS$S2,X2:=S2
       ][S1 %in% SEASONS$S1 & S2 %in% SEASONS$S1,X1:=S1
-      ][S1 %in% SEASONS$S1 & S2 %in% SEASONS$S1,X2:=S2 
+      ][S1 %in% SEASONS$S1 & S2 %in% SEASONS$S1,X2:=S2
       ][S1 %in% SEASONS$S2 & S2 %in% SEASONS$S2,X1:=S1
       ][S1 %in% SEASONS$S2 & S2 %in% SEASONS$S2,X2:=S2]
-      
+
       # Assign LGP to reorganised seasons
       SOSData[X1==S1,Y1:=LGP_1
       ][X1==S2,Y1:=LGP_2
@@ -240,7 +240,7 @@ for(COUNTRY in Countries){
       ][,LGP2:=Y2
       ][,Y1:=NULL
       ][,Y2:=NULL]
-      
+
       # Assign Modes to reorganised seasons
       SOSData[X1==S1,Y1:=Modes_1
       ][X1==S2,Y1:=Modes_2
@@ -250,7 +250,7 @@ for(COUNTRY in Countries){
       ][,Modes2:=Y2
       ][,Y1:=NULL
       ][,Y2:=NULL]
-      
+
       # Assign Tot.Rain to reorganised seasons
       SOSData[X1==S1,Y1:=Tot.Rain_1
       ][X1==S2,Y1:=Tot.Rain_2
@@ -260,7 +260,7 @@ for(COUNTRY in Countries){
       ][,Tot.Rain2:=Y2
       ][,Y1:=NULL
       ][,Y2:=NULL]
-      
+
       # Assign Tot.ETo to reorganised seasons
       SOSData[X1==S1,Y1:=Tot.ETo_1
       ][X1==S2,Y1:=Tot.ETo_2
@@ -270,7 +270,7 @@ for(COUNTRY in Countries){
       ][,Tot.ETo2:=Y2
       ][,Y1:=NULL
       ][,Y2:=NULL]
-      
+
       # Assign Balance to reorganised seasons
       SOSData[X1==S1,Y1:=Balance_1
       ][X1==S2,Y1:=Balance_2
@@ -280,19 +280,19 @@ for(COUNTRY in Countries){
       ][,Balance2:=Y2
       ][,Y1:=NULL
       ][,Y2:=NULL]
-      
-      
+
+
       # Set seasons and tidy up
       SOSData[,S1:=X1][,S2:=X2][,X1:=NULL][,X2:=NULL]
-      
+
       SOSData[,Swettest:=S1
       ][!is.na(SOS_2) & Tot.Rain_1<Tot.Rain_2,Swettest:=S2
       ][is.na(Swettest),Swettest:=S2]
-      
+
     }}
-  
+
   SOSData[,Seasons:=sum(c(!is.na(S1),!is.na(S2)))*1,by=Index]
-  
+
   # Manually tidy up countries which are largely unimodal but have a few pixels that split the seasons.
   # Note: Check that correct LGP field is being used here
   if(F){
@@ -307,7 +307,7 @@ for(COUNTRY in Countries){
     ][S1==S2,S2:=NA]
   }
   }
-  
+
   # Classify systems ####
   SOSData[,LGPsum:=sum(c(LGP1,LGP2),na.rm=T),by=Index
   ][Seasons==2,System:="2 WS"
@@ -315,24 +315,24 @@ for(COUNTRY in Countries){
   ][Seasons==1 & Modes1>1,System:="1 WS-multimodal"
   ][LGPsum>=30,System:=paste0(System,"-LGP>=30")
   ][LGPsum<=6,System:=paste0(System,"-LGP<=6")]
-  
+
   if(!dir.exists(paste0(PlotDir,"/Data"))){
     dir.create(paste0(PlotDir,"/Data"))
   }
   Colnames<-colnames(SOSData)[!grepl("_3|_4|_5|_6",colnames(SOSData))]
   SOSData<-SOSData[,..Colnames]
   save(SOSData,file=paste0(PlotDir,"/Data/",COUNTRY,".RData"))
-  
+
   # prepare coordinates, data, and proj4string
   X <- terra::vect(SOSData,geom=c("x", "y"),crs=terra::crs(CHIRPSrast))
-  
-  BaseRaster<-terra::rast(ncol=SOSData[,length(unique(x))], 
-                          nrow=SOSData[,length(unique(y))], 
-                          xmin=SOSData[,min(x)], 
-                          xmax=SOSData[,max(x)], 
+
+  BaseRaster<-terra::rast(ncol=SOSData[,length(unique(x))],
+                          nrow=SOSData[,length(unique(y))],
+                          xmin=SOSData[,min(x)],
+                          xmax=SOSData[,max(x)],
                           ymin=SOSData[,min(y)],
                           ymax=SOSData[,max(y)])
-  
+
   # SOS Maps ####
   Y1<-round(terra::rasterize(X,BaseRaster,field="S1"),0)
   if(SOSData[!is.na(S2),.N==0]){
@@ -342,39 +342,39 @@ for(COUNTRY in Countries){
     Y2<-round(terra::rasterize(X,BaseRaster,field="S2"),0)
   }
   Ymax<-round(terra::rasterize(X,BaseRaster,field="Swettest"),0)
-  
+
   LGP_1<-round(terra::rasterize(X,BaseRaster,field="LGP1"),0)
-  
+
   if(!2 %in% SOSData$Seasons){
     LGP_2<-LGP_1
     LGP_2[]<-NA
   }else{
     LGP_2<-round(terra::rasterize(X,BaseRaster,field="LGP2"),0)
   }
-  
-  
+
+
   SOS<-c(Y1,Y2,Ymax)
   LGP<-c(LGP_1,LGP_2,sum(c(LGP_1,LGP_2),na.rm = T))
-  
+
   names(SOS)<-c("SOS_1",
                 "SOS_2",
                 "SOS_Wettest")
-  
+
   names(LGP)<-c("LGP_1",
                 "LGP_2",
                 "LGP_sum")
-  
+
   SOS2<-raster::stack(SOS)
   LGP2<-raster::stack(LGP)
-  
+
   coords <- xyFromCell(SOS2, seq_len(ncell(SOS2)))
   Data <- raster::stack(as.data.frame(raster::getValues(SOS2)))
   names(SOS2) <- names(SOS)
-  
+
   Data <- cbind(coords, Data)
   Data$values<-factor(Data$values,levels=1:36)
-  
-  SOSmap<-ggplot(Data) + 
+
+  SOSmap<-ggplot(Data) +
     geom_tile(aes(x, y, fill = values)) +
     facet_wrap(~ ind,ncol=3) +
     scale_fill_manual(
@@ -389,25 +389,25 @@ for(COUNTRY in Countries){
           axis.title = element_blank())+
     guides(fill=guide_legend(nrow=3))+
     coord_equal()
-  
+
   ggsave(filename = paste0(COUNTRY," - SOS.png"),
          plot = SOSmap,
          path = PlotDir,
          width= 200,
-         height = 200*0.6,      
+         height = 200*0.6,
          units = "mm",
          scale = 1.2,
          dpi = 600,
          device = png,
          bg="white")
-  
+
   coords <- xyFromCell(LGP2, seq_len(ncell(LGP2)))
   Data <- raster::stack(as.data.frame(raster::getValues(LGP2)))
   names(LGP2) <- names(LGP)
-  
+
   Data <- cbind(coords, Data)
 
-  LGPmap<-ggplot(Data) + 
+  LGPmap<-ggplot(Data) +
     geom_tile(aes(x, y, fill = values)) +
     facet_wrap(~ ind,ncol=3) +
     viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -416,44 +416,44 @@ for(COUNTRY in Countries){
     theme(legend.position = "bottom",
           axis.title = element_blank())+
     coord_equal()
-  
+
   ggsave(filename = paste0(COUNTRY," - LGP.png"),
          plot = LGPmap,
          path = PlotDir,
          width= 200,
-         height = 200*0.6,      
+         height = 200*0.6,
          units = "mm",
          scale = 1.2,
          dpi = 600,
          device = png,
          bg="white")
-  
-  
+
+
   # LTAvg Rain Map Data ####
   TotRain1<-round(terra::rasterize(X,BaseRaster,field="Tot.Rain1"),0)
-  
+
   if(!2 %in% SOSData$Seasons){
     TotRain2<-TotRain1
     TotRain2[]<-NA
   }else{
     TotRain2<-round(terra::rasterize(X,BaseRaster,field="Tot.Rain2"),0)
   }
-  
+
   TotRain<-c(TotRain1,TotRain2,sum(c(TotRain1,TotRain2),na.rm = T))
-  
+
   names(TotRain)<-c("TotRain1",
                     "TotRain2",
                     "TotRain_sum")
-  
+
   TotRain2<-raster::stack(TotRain)
   names(TotRain2) <- names(TotRain)
-  
+
   # LTAvg - Plot Rain ####
   Data <- raster::stack(as.data.frame(raster::getValues(TotRain2)))
-  
+
   Data <- cbind(coords, Data)
-  
-  Rainmap<-ggplot(Data) + 
+
+  Rainmap<-ggplot(Data) +
     geom_tile(aes(x, y, fill = values)) +
     facet_wrap(~ ind,ncol=3) +
     viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -463,43 +463,43 @@ for(COUNTRY in Countries){
           axis.title = element_blank(),
           legend.key.width=unit(0.1,"npc"))+
     coord_equal()
-  
+
   ggsave(filename = paste0(COUNTRY," - Rain.png"),
          plot = Rainmap,
          path = PlotDir,
          width= 200,
-         height = 200*0.6,      
+         height = 200*0.6,
          units = "mm",
          scale = 1.2,
          dpi = 600,
          device = png,
          bg="white")
-  
+
   # LTAvg Map Data ####
   Balance1 <-round(terra::rasterize(X,BaseRaster,field="Balance1"),0)
-  
+
   if(!2 %in% SOSData$Seasons){
-    Balance2<-Balance1 
+    Balance2<-Balance1
     Balance2[]<-NA
   }else{
     Balance2<-round(terra::rasterize(X,BaseRaster,field="Balance2"),0)
   }
-  
+
   Balance<-c(Balance1 ,Balance2,sum(c(Balance1 ,Balance2),na.rm = T))
-  
+
   names(Balance)<-c("Balance1 ",
                     "Balance2",
                     "Balance_sum")
-  
+
   Balance2<-raster::stack(Balance)
   names(Balance2) <- names(Balance)
-  
+
   # LTAvg - Plot Balance ####
   Data <- raster::stack(as.data.frame(raster::getValues(Balance2)))
-  
+
   Data <- cbind(coords, Data)
-  
-  Balancemap<-ggplot(Data) + 
+
+  Balancemap<-ggplot(Data) +
     geom_tile(aes(x, y, fill = values)) +
     facet_wrap(~ ind,ncol=3) +
     viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -509,32 +509,32 @@ for(COUNTRY in Countries){
           axis.title = element_blank(),
           legend.key.width=unit(0.1,"npc"))+
     coord_equal()
-  
+
   ggsave(filename = paste0(COUNTRY," - Balance.png"),
          plot = Balancemap,
          path = PlotDir,
          width= 200,
-         height = 200*0.6,      
+         height = 200*0.6,
          units = "mm",
          scale = 1.2,
          dpi = 600,
          device = png,
          bg="white")
-  
+
   # Seasonality Map ####
-  
+
   Ysystem<-terra::rasterize(X,BaseRaster,field="System")
   names(Ysystem)<-"System"
   coords <- xyFromCell(Ysystem, seq_len(ncell(Ysystem)))
   Data <-values(Ysystem)
   names(Ysystem) <- names(Ysystem)
-  
+
   Levels<-data.table(value=sort(unique(Ysystem[!is.na(Ysystem)])),description=levels(Ysystem)[[1]])
-  
+
   Data <- data.frame(cbind(coords, Data))
   Data$System<-Levels$description.category[match(Data$System,Levels$value)]
-  
-  Ysystem<-ggplot(Data) + 
+
+  Ysystem<-ggplot(Data) +
     geom_tile(aes(x, y, fill = System)) +
     viridis::scale_fill_viridis(option="turbo",discrete = T,na.value="transparent",na.translate = F)+
     theme_bw()+
@@ -544,12 +544,12 @@ for(COUNTRY in Countries){
           legend.direction = "vertical")+
     guides(fill=guide_legend(ncol=3))+
     coord_equal()
-  
+
   Ysystem2<-Ysystem+theme(legend.position = "bottom",
                           axis.title = element_blank(),
                           legend.direction = "horizontal")+
     guides(fill=guide_legend(nrow=2))
-  
+
   ggsave(filename = paste0(COUNTRY," - systems.png"),
          plot = Ysystem2,
          path = PlotDir,
@@ -560,17 +560,17 @@ for(COUNTRY in Countries){
          dpi = 600,
          device = png,
          bg="white")
-  
+
   # No Seasons Map ####
   Yseasons<-terra::rasterize(X,BaseRaster,field="Seasons")
   names(Yseasons)<-"Seasons"
   coords <- xyFromCell(Yseasons, seq_len(ncell(Yseasons)))
   Data <-values(Yseasons)
   names(Yseasons) <- names(Yseasons)
-  
+
   Data <- data.frame(cbind(coords, Seasons=Data))
-  
-  Yseasons<-ggplot(Data) + 
+
+  Yseasons<-ggplot(Data) +
     geom_tile(aes(x, y, fill = as.factor(Seasons))) +
     viridis::scale_fill_viridis(option="viridis",discrete = T,na.value="transparent",na.translate = F,direction=-1)+
     theme_bw()+
@@ -580,11 +580,11 @@ for(COUNTRY in Countries){
           legend.direction = "vertical")+
     guides(fill=guide_legend(ncol=2))+
     coord_equal()
-  
+
   # Combined Map ####
   g1<-gridExtra::arrangeGrob(grobs=list(SOSmap,LGPmap,Rainmap,Balancemap),layout_matrix=rbind(rep(1:2,each=3),rep(3:4,each=3)))
   g2<-gridExtra::arrangeGrob(grobs=list(Yseasons,Ysystem,g1),layout_matrix=rbind(c(1,3,3,3),c(2,3,3,3)))
-  
+
   ggsave(filename = paste0(COUNTRY," - Combined.png"),
          plot = g2,
          path = PlotDir,
@@ -595,7 +595,7 @@ for(COUNTRY in Countries){
          device=png,
          dpi = 600,
          bg="white")
-  
+
 }
 
 # LT avg - all countries ####
@@ -614,10 +614,10 @@ crs    <- CRS("+init=epsg:4326") # proj4string of coords
 # make the SpatialPointsDataFrame object
 X <- terra::vect(SOSData,geom=c("x", "y"),crs=terra::crs(CHIRPSrast))
 
-BaseRaster<-terra::rast(ncol=SOSData[,length(unique(x))], 
-                        nrow=SOSData[,length(unique(y))], 
-                        xmin=SOSData[,min(x)], 
-                        xmax=SOSData[,max(x)], 
+BaseRaster<-terra::rast(ncol=SOSData[,length(unique(x))],
+                        nrow=SOSData[,length(unique(y))],
+                        xmin=SOSData[,min(x)],
+                        xmax=SOSData[,max(x)],
                         ymin=SOSData[,min(y)],
                         ymax=SOSData[,max(y)])
 
@@ -695,7 +695,7 @@ names(SOS2) <- names(SOS)
 Data <- cbind(coords, Data)
 Data$values<-factor(Data$values,levels=1:36)
 
-SOSmap<-ggplot(Data) + 
+SOSmap<-ggplot(Data) +
   geom_tile(aes(x, y, fill = values)) +
   facet_wrap(~ ind,ncol=3) +
   scale_fill_manual(
@@ -730,7 +730,7 @@ names(LGP2) <- names(LGP)
 
 Data <- cbind(coords, Data)
 
-LGPmap<-ggplot(Data) + 
+LGPmap<-ggplot(Data) +
   geom_tile(aes(x, y, fill = values)) +
   facet_wrap(~ ind,ncol=3) +
   viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -764,7 +764,7 @@ Levels<-data.table(value=sort(unique(Ysystem[!is.na(Ysystem)])),description=leve
 Data <- data.frame(cbind(coords, Data))
 Data$System<-Levels$description.category[match(Data$System,Levels$value)]
 
-Ysystem<-ggplot(Data) + 
+Ysystem<-ggplot(Data) +
   geom_tile(aes(x, y, fill = System)) +
   viridis::scale_fill_viridis(option="turbo",discrete = T,na.value="transparent",na.translate = F)+
   theme_bw()+
@@ -806,7 +806,7 @@ Data <- raster::stack(as.data.frame(raster::getValues(TotRain2)))
 
 Data <- cbind(coords, Data)
 
-Rainmap<-ggplot(Data) + 
+Rainmap<-ggplot(Data) +
   geom_tile(aes(x, y, fill = values)) +
   facet_wrap(~ ind,ncol=3) +
   viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -821,7 +821,7 @@ ggsave(filename = "Africa - Rain.png",
        plot = Rainmap,
        path = PlotDir,
        width= 200,
-       height = 200*0.6,      
+       height = 200*0.6,
        units = "mm",
        scale = 1.2,
        dpi = 600,
@@ -846,7 +846,7 @@ Data <- raster::stack(as.data.frame(raster::getValues(Balance2)))
 
 Data <- cbind(coords, Data)
 
-Balancemap<-ggplot(Data) + 
+Balancemap<-ggplot(Data) +
   geom_tile(aes(x, y, fill = values)) +
   facet_wrap(~ ind,ncol=3) +
   viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -861,7 +861,7 @@ ggsave(filename = "Africa - Balance.png",
        plot = Balancemap,
        path = PlotDir,
        width= 200,
-       height = 200*0.6,      
+       height = 200*0.6,
        units = "mm",
        scale = 1.2,
        dpi = 600,
@@ -877,7 +877,7 @@ names(Yseasons) <- names(Yseasons)
 
 Data <- data.frame(cbind(coords, Seasons=Data))
 
-Yseasons<-ggplot(Data) + 
+Yseasons<-ggplot(Data) +
   geom_tile(aes(x, y, fill = as.factor(Seasons))) +
   viridis::scale_fill_viridis(option="viridis",discrete = T,na.value="transparent",na.translate = F,direction=-1)+
   theme_bw()+
@@ -912,21 +912,21 @@ Statistic<-"mean" # options are mean or mode
 
 for(Statistic in c("mean","mode")){
   PlotDir<-paste0(PlotDir1,"/Seasonal-",Statistic)
-  
+
   if(!dir.exists(PlotDir)){
     dir.create(PlotDir,recursive=T)
   }
-  
-  
+
+
   for(COUNTRY in Countries){
     print(paste0(COUNTRY,"-",Statistic))
-    
+
     Map.Subset<-AfricaMap[AfricaMap$ADMIN==COUNTRY,]
-    
+
       SOSData1<-data.table::copy(SOSlist[[COUNTRY]]$LTAvg2)
       setnames(SOSData1,c("Dekad.Season","Tot.Rain.mean"),c("Seq","Tot.Rain"))
       SOSData1[,Seasons:=length(unique(Seq)),by=Index]
-      
+
       if(Statistic=="mean"){
         SOSData1[,SOS:=round(SOS.mean,0)][SOS==0,SOS:=36]
         SOSData1[,SOSdev:=SOS.mean.dev]
@@ -934,7 +934,7 @@ for(Statistic in c("mean","mode")){
         SOSData1[,EOSdev:=EOS.mean.dev]
         SOSData1[,LGP:=round(LGP.mean,0)]
       }
-      
+
       if(Statistic=="mode"){
         SOSData1[,SOS:=round(SOS.mode,0)][SOS==0,SOS:=36]
         SOSData1[,SOSdev:=SOS.mode.dev]
@@ -942,45 +942,45 @@ for(Statistic in c("mean","mode")){
         SOSData1[,EOSdev:=EOS.mode.dev]
         SOSData1[,LGP:=round(LGP.mode,0)]
       }
-  
-    
+
+
     # NOTE - here seasons with insufficient length or rainfall are removed. This could be done after merging of bimodal seasons?
     SOSData1<-SOSData1[LGP>=MinLength & Tot.Rain>MinRain]
-    
+
     # Load country raster
     CHIRPS_Ref<-terra::rast(paste0(CHIRPS_Dekad_Dir,"/",COUNTRY,".tif"))[[1]]
     CHIRPS_Ref<-data.table(terra::as.data.frame(CHIRPS_Ref,xy=T,cells=T))[,1:3]
     setnames(CHIRPS_Ref,"cell","Index")
-    
+
     SOSData1<-merge(CHIRPS_Ref,SOSData1,by="Index",all.x=F)
-    
+
     SOSData1<-dcast(SOSData1,Index+x+y+Seasons~Seq,value.var = c("Total.Seasons","SOS","SOSdev","EOS","EOSdev","LGP","LGP.sd","Tot.Rain","Tot.Rain.sd",
                                                                "Tot.ETo.mean","Tot.ETo.sd","Balance.mean","Balance.sd"))
-    
+
     if(!"SOS_2" %in% colnames(SOSData1)){
       SOSData1[,c("Total.Seasons_2","SOS_2","SOSdev_2","EOS_2","EOSdev_2","LGP_2","LGP.sd_2","Tot.Rain_2","Tot.Rain.sd_2",
                   "Tot.ETo.mean_2","Tot.ETo.sd_2","Balance.mean_2","Balance.sd_2"):=NA]
     }
-    
+
     # Calculate distance between seasons
     SOSData1[!(is.na(SOS_1)|is.na(SOS_2)),Dist12:=round(CicularDist(EOS_1,SOS_2,interval=36),0),by=Index]
     SOSData1[!(is.na(SOS_1)|is.na(SOS_2)),Dist21:=round(CicularDist(EOS_2,SOS_1,interval=36),0),by=Index]
-    
+
     # Determine the order of seasons by the length of the distance between them, this is used to determine how bimodal
     # seasons are merged
     SOSData1[,MinDist:=paste(which(c(Dist12,Dist21)<=SeasonGapT),collapse="-"),by=Index][MinDist=="",MinDist:=NA]
     SOSData1[,MinDistN:=sum(c(Dist12,Dist21)<=SeasonGapT),by=Index]
-    
+
     SOSData<-data.table::copy(SOSData1)
-    
+
     # New columns S1, S2, etc. to record modified values
     SOSData[,S1:=SOS_1
             ][,S2:=SOS_2
-              ][,SOSdev1:=SOSdev_1 
-              ][,SOSdev2:=SOSdev_2 
+              ][,SOSdev1:=SOSdev_1
+              ][,SOSdev2:=SOSdev_2
               ][,E1:=EOS_1
-              ][,EOSdev1:=EOSdev_1 
-              ][,EOSdev2:=EOSdev_2 
+              ][,EOSdev1:=EOSdev_1
+              ][,EOSdev2:=EOSdev_2
                 ][,E2:=EOS_2
                   ][,LGP1:=LGP_1
                     ][,LGP2:=LGP_2
@@ -992,43 +992,43 @@ for(Statistic in c("mean","mode")){
                                 ][,Balance2:=Balance.mean_2
                                   ][,Total.Seasons1:=Total.Seasons_1
                                     ][,Total.Seasons2:=Total.Seasons_2]
-    
+
     # If both MinDist values are less than SeasonGapT then set end of season to dekad before SOS, unless S1==1 then set to 36
     SOSData[MinDistN==2,E1:=if(S1==1){36}else{S1-1},by=Index]  # Recalculate number of seasons using reclassified season cols
-  
+
     # If there is one gap < MinDist and gap is between 1 & 2 then set end of season to E2
     SOSData[MinDistN==1 & MinDist==1,E1:=E2]
     SOSData[MinDistN==1 & MinDist==1,EOSdev1:=EOSdev2]
-  
+
     # If there is one gap < MinDist and gap is between 2 & 1 then set start of season S1
     SOSData[MinDistN==1 & MinDist==2,S1:=S2]
     SOSData[MinDistN==1 & MinDist==2,SOSdev1:=SOSdev_2]
-    
+
     # If there is one gap < MinDist and gap is between 2 & 1 then set start of season S1
     SOSData[MinDistN==1 & MinDist==2,Total.Seasons1:=max(Total.Seasons1,Total.Seasons2)]
-  
+
     # For season we are combining sum LGP and then remove data relating to second season.
     SOSData[MinDistN %in% c(1,2),LGP1:=LGP1+LGP2
             ][MinDistN %in% c(1,2),Tot.Rain1:=Tot.Rain1+Tot.Rain2
               ][MinDistN %in% c(1,2),Tot.ETo1:=Tot.ETo1+Tot.ETo2
                 ][MinDistN %in% c(1,2),Balance1:=Balance1+Balance2
                   ][MinDistN %in% c(1,2),c("LGP2","E2","S2","Tot.Rain2","Tot.ETo2","Balance2","EOSdev2","SOSdev2","Total.Seasons2"):=NA]
-  
+
     SOSData[,Seasons:=sum(c(!is.na(S1),!is.na(S2)),na.rm=T),by=Index]
-    
+
     # Create lists that correspond to dekads in each season
     if(SOSData[,!any(Seasons==2)]){ # If there is only 1 season and it is season 1
       SEASONS<-list(S1=OrderDekadSeq(unique(round(SOSData$S1))),S2=NULL)
-      
+
       SOSData[,S1:=round(S1,0)][,S2:=NA][S1==0,S1:=36]
-      
+
       SOSData[,Swettest:=S1][!is.na(S1),Seasons:=1]
     }else{
       if(SOSData[,!any(Seasons==1)]){ # If there is only 1 season and it is season 2
         SEASONS<-list(S1=OrderDekadSeq(unique(round(SOSData$S2))),S2=NULL)
-        
+
         SOSData[,S1:=round(S2,0)][,S2:=NA][S1==0,S1:=36]
-        
+
         SOSData[,Swettest:=S1][!is.na(S1),Seasons:=1]
       }else{ # Multiple seasons
         # Use multimode function to determine seasons from the distribution of SOS values (from all cells and both seasons combined)
@@ -1041,7 +1041,7 @@ for(Statistic in c("mean","mode")){
           Left<-if(Modes[1]==1){NULL}else{1:(Modes[1]-1)}
           Right<-if(Modes[3]==36){NULL}else{(Modes[3]+1):36}
           Rem<-c(Right,Left)
-          
+
           if(length(Rem) %% 2 == 0){
             S2<-c(S2,Rem[1:(length(Rem)/2)])
             S1<-c(Rem[(1+(length(Rem)/2)):length(Rem)],S1)
@@ -1049,10 +1049,10 @@ for(Statistic in c("mean","mode")){
             S2<-c(S2,Rem[1:(floor(length(Rem)/2))])
             S1<-c(Rem[ceiling(((length(Rem)/2))):length(Rem)],S1)
           }
-          
+
           SEASONS<-list(S1=S1,S2=S2)
         }
-        
+
         if(COUNTRY=="Kenya"){
           SEASONS<-list(S1=c(35:36,1:15),S2=16:34)
         }
@@ -1062,7 +1062,7 @@ for(Statistic in c("mean","mode")){
         if(COUNTRY=="Mozambique"){
           SEASONS<-list(S1=1:36,S2=NULL)
         }
-        
+
         # Reorganize seasons - create columns to state which season a cell x season belongs to
         SOSData[,X1:=as.numeric(NA)
         ][,X2:=as.numeric(NA)
@@ -1071,10 +1071,10 @@ for(Statistic in c("mean","mode")){
         ][S2 %in% SEASONS$S1,X1:=S2
         ][S2 %in% SEASONS$S2,X2:=S2
         ][S1 %in% SEASONS$S1 & S2 %in% SEASONS$S1,X1:=S1 # Where both S1 and S2 are in the same season then assign one to S1 and the other to S2
-        ][S1 %in% SEASONS$S1 & S2 %in% SEASONS$S1,X2:=S2 
+        ][S1 %in% SEASONS$S1 & S2 %in% SEASONS$S1,X2:=S2
         ][S1 %in% SEASONS$S2 & S2 %in% SEASONS$S2,X1:=S1
         ][S1 %in% SEASONS$S2 & S2 %in% SEASONS$S2,X2:=S2]
-  
+
         # Assign LGP to reorganised seasons
         SOSData[X1==S1,Y1:=LGP1
                 ][X1==S2,Y1:=LGP2
@@ -1084,7 +1084,7 @@ for(Statistic in c("mean","mode")){
                         ][,LGP2:=Y2
                           ][,Y1:=NULL
                             ][,Y2:=NULL]
-        
+
         # Assign SOSdev to reorganised seasons
         SOSData[X1==S1,Y1:=SOSdev1
         ][X1==S2,Y1:=SOSdev2
@@ -1094,7 +1094,7 @@ for(Statistic in c("mean","mode")){
         ][,SOSdev2:=Y2
         ][,Y1:=NULL
         ][,Y2:=NULL]
-        
+
         # Assign EOSdev to reorganised seasons
         SOSData[X1==S1,Y1:=EOSdev1
         ][X1==S2,Y1:=EOSdev2
@@ -1104,7 +1104,7 @@ for(Statistic in c("mean","mode")){
         ][,EOSdev2:=Y2
         ][,Y1:=NULL
         ][,Y2:=NULL]
-        
+
         # Assign Tot.Rain to reorganised seasons
         SOSData[X1==S1,Y1:=Tot.Rain1
         ][X1==S2,Y1:=Tot.Rain2
@@ -1114,7 +1114,7 @@ for(Statistic in c("mean","mode")){
         ][,Tot.Rain2:=Y2
         ][,Y1:=NULL
         ][,Y2:=NULL]
-        
+
         # Assign Tot.ETo to reorganised seasons
         SOSData[X1==S1,Y1:=Tot.ETo1
         ][X1==S2,Y1:=Tot.ETo2
@@ -1124,7 +1124,7 @@ for(Statistic in c("mean","mode")){
         ][,Tot.ETo2:=Y2
         ][,Y1:=NULL
         ][,Y2:=NULL]
-        
+
         # Assign Balance to reorganised seasons
         SOSData[X1==S1,Y1:=Balance1
         ][X1==S2,Y1:=Balance2
@@ -1134,7 +1134,7 @@ for(Statistic in c("mean","mode")){
         ][,Balance2:=Y2
         ][,Y1:=NULL
         ][,Y2:=NULL]
-        
+
         # Assign Total.Seasons to reorganised seasons
         SOSData[X1==S1,Y1:=Total.Seasons1
         ][X1==S2,Y1:=Total.Seasons2
@@ -1144,7 +1144,7 @@ for(Statistic in c("mean","mode")){
         ][,Total.Seasons2:=Y2
         ][,Y1:=NULL
         ][,Y2:=NULL]
-        
+
         # Assign EOS to reorganised seasons
         SOSData[X1==S1,Y1:=E1
         ][X1==S2,Y1:=E2
@@ -1154,18 +1154,18 @@ for(Statistic in c("mean","mode")){
         ][,E2:=Y2
         ][,Y1:=NULL
         ][,Y2:=NULL]
-        
+
         SOSData[,S1:=X1][,S2:=X2][,X1:=NULL][,X2:=NULL]
-  
+
         # Assign wettest season
         SOSData[,Swettest:=S1
         ][!is.na(S2) & Tot.Rain1<Tot.Rain2,Swettest:=S2
         ][is.na(Swettest),Swettest:=S2]
-        
+
       }}
-    
+
     SOSData[,Seasons:=sum(c(!is.na(S1),!is.na(S2))),by=Index]
-    
+
     # Manually tidy up countries which are largely unimodal but have a few pixels that split the seasons.
     # Note: Check that correct LGP field is being used here
     if(COUNTRY %in% c("Nigeria","Burundi","Madagascar","Mozambique")){
@@ -1188,7 +1188,7 @@ for(Statistic in c("mean","mode")){
       ][is.na(S1) & !is.na(S2),S1:=S2
       ][S1==S2,S2:=NA]
     }
-    
+
     # Classify systems
     SOSData[,LGPsum:=sum(c(LGP1,LGP2),na.rm=T),by=Index
     ][Seasons==2,System:="2 WS"
@@ -1196,26 +1196,26 @@ for(Statistic in c("mean","mode")){
     ][Seasons==1 & !MinDistN %in% c(1,2),System:="1 WS"
     ][LGPsum>=30,System:=paste0(System,"-LGP>=30")
     ][LGPsum<=6,System:=paste0(System,"-LGP<=6")]
-    
+
     if(!dir.exists(paste0(PlotDir,"/Data"))){
       dir.create(paste0(PlotDir,"/Data"))
     }
     Colnames<-colnames(SOSData)[!grepl("_3|_4|_5|_6",colnames(SOSData))]
     SOSData<-SOSData[,..Colnames]
     save(SOSData,file=paste0(PlotDir,"/Data/",COUNTRY,".RData"))
-    
+
     # prepare coordinates, data, and proj4string
     X <- terra::vect(SOSData,geom=c("x", "y"),crs=terra::crs(CHIRPSrast))
-    
-    BaseRaster<-terra::rast(ncol=SOSData[,length(unique(x))], 
-                            nrow=SOSData[,length(unique(y))], 
-                            xmin=SOSData[,min(x)], 
-                            xmax=SOSData[,max(x)], 
+
+    BaseRaster<-terra::rast(ncol=SOSData[,length(unique(x))],
+                            nrow=SOSData[,length(unique(y))],
+                            xmin=SOSData[,min(x)],
+                            xmax=SOSData[,max(x)],
                             ymin=SOSData[,min(y)],
                             ymax=SOSData[,max(y)])
-    
+
     # TO DO: 2-factor pallete for deviance x magnitude - could be adjusting alpha or a biscale plot ####
-    
+
     # SOS Map Data ####
     S1<-round(terra::rasterize(X,BaseRaster,field="S1"),0)
     if(SOSData[!is.na(S2),.N==0]){
@@ -1224,20 +1224,20 @@ for(Statistic in c("mean","mode")){
     }else{
       S2<-round(terra::rasterize(X,BaseRaster,field="S2"),0)
     }
-    
+
     Swettest<-round(terra::rasterize(X,BaseRaster,field="Swettest"),0)
-    
+
     SOS<-c(S1,S2,Swettest)
-    
+
     names(SOS)<-c("SOS_1",
                   "SOS_2",
                   "SOS_Wettest")
-    
+
     SOS2<-raster::stack(SOS)
     names(SOS2) <- names(SOS)
-    
+
     coords <- xyFromCell(SOS2, seq_len(ncell(SOS2)))
-    
+
     # SOS Deviance Map Data ####
     SOSdev1<-terra::rasterize(X,BaseRaster,field="SOSdev1")
     if(SOSData[!is.na(SOSdev2),.N==0]){
@@ -1246,96 +1246,96 @@ for(Statistic in c("mean","mode")){
     }else{
       SOSdev2<-terra::rasterize(X,BaseRaster,field="SOSdev2")
     }
-    
+
     SOSdev<-c(SOSdev1,SOSdev2)
-    
+
     names(SOSdev)<-c("SOSdev1","SOSdev2")
-    
+
     SOSdev2<-raster::stack(SOSdev)
     names(SOSdev2) <- names(SOSdev)
-    
+
     # LGP Map Data ####
     LGP_1<-round(terra::rasterize(X,BaseRaster,field="LGP1"),0)
-    
+
     if(!2 %in% SOSData$Seasons){
       LGP_2<-LGP_1
       LGP_2[]<-NA
     }else{
       LGP_2<-round(terra::rasterize(X,BaseRaster,field="LGP2"),0)
     }
-    
+
     LGP<-c(LGP_1,LGP_2,sum(c(LGP_1,LGP_2),na.rm = T))
-    
+
     names(LGP)<-c("LGP_1",
                   "LGP_2",
                   "LGP_sum")
-    
+
     LGP2<-raster::stack(LGP)
     names(LGP2) <- names(LGP)
-    
-    
+
+
     # Total Rain Map Data ####
     TotRain1<-round(terra::rasterize(X,BaseRaster,field="Tot.Rain1"),0)
-    
+
     if(!2 %in% SOSData$Seasons){
       TotRain2<-TotRain1
       TotRain2[]<-NA
     }else{
       TotRain2<-round(terra::rasterize(X,BaseRaster,field="Tot.Rain2"),0)
     }
-    
+
     TotRain<-c(TotRain1,TotRain2,sum(c(TotRain1,TotRain2),na.rm = T))
-    
+
     names(TotRain)<-c("TotRain1",
                   "TotRain2",
                   "TotRain_sum")
-    
+
     TotRain2<-raster::stack(TotRain)
     names(TotRain2) <- names(TotRain)
-    
+
     # Balance Map Data ####
     Balance1 <-round(terra::rasterize(X,BaseRaster,field="Balance1"),0)
-    
+
     if(!2 %in% SOSData$Seasons){
-      Balance2<-Balance1 
+      Balance2<-Balance1
       Balance2[]<-NA
     }else{
       Balance2<-round(terra::rasterize(X,BaseRaster,field="Balance2"),0)
     }
-    
+
     Balance<-c(Balance1 ,Balance2,sum(c(Balance1 ,Balance2),na.rm = T))
-    
+
     names(Balance)<-c("Balance1 ",
                       "Balance2",
                       "Balance_sum")
-    
+
     Balance2<-raster::stack(Balance)
     names(Balance2) <- names(Balance)
-    
+
     # Total Seasons Map Data ####
     Total.Seasons1 <-terra::rasterize(X,BaseRaster,field="Total.Seasons1")
-    
+
     if(!2 %in% SOSData$Seasons){
-      Total.Seasons2<-Total.Seasons1 
+      Total.Seasons2<-Total.Seasons1
       Total.Seasons2[]<-NA
     }else{
       Total.Seasons2<-terra::rasterize(X,BaseRaster,field="Total.Seasons2")
     }
-    
+
     Total.Seasons<-c(Total.Seasons1 ,Total.Seasons2)
     Total.Seasons<-Total.Seasons/NoSeasons
-    
-    names(Total.Seasons)<-c("Prop.Seasons1","Prop.Seasons2")                  
-    
+
+    names(Total.Seasons)<-c("Prop.Seasons1","Prop.Seasons2")
+
     Total.Seasons2<-raster::stack(Total.Seasons)
     names(Total.Seasons2) <- names(Total.Seasons)
-    
+
     # Plot SOS ####
     Data <- raster::stack(as.data.frame(raster::getValues(SOS2)))
     Data <- cbind(coords, Data)
     Data$values<-factor(Data$values,levels=1:36)
-    
-    SOSmap<-ggplot(Data) + 
+
+    SOSmap<-ggplot(Data) +
       geom_tile(aes(x, y, fill = values)) +
       facet_wrap(~ ind,ncol=3) +
       scale_fill_manual(
@@ -1350,13 +1350,13 @@ for(Statistic in c("mean","mode")){
             axis.title = element_blank())+
       guides(fill=guide_legend(nrow=3))+
       coord_equal()
-    
+
     # Plot SOS deviance ####
     Data <- raster::stack(as.data.frame(raster::getValues(SOSdev2)))
-    
+
     Data <- cbind(coords, Data)
-  
-    SOSdevmap<-ggplot(Data) + 
+
+    SOSdevmap<-ggplot(Data) +
       geom_tile(aes(x, y, fill = values)) +
       facet_wrap(~ ind,ncol=2) +
       viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -1366,14 +1366,14 @@ for(Statistic in c("mean","mode")){
             axis.title = element_blank(),
             legend.key.width=unit(0.1,"npc"))+
       coord_equal()
-    
+
     # Plot LGP ####
     Data <- raster::stack(as.data.frame(raster::getValues(LGP2)))
     names(LGP2) <- names(LGP)
-    
+
     Data <- cbind(coords, Data)
-    
-    LGPmap<-ggplot(Data) + 
+
+    LGPmap<-ggplot(Data) +
       geom_tile(aes(x, y, fill = values)) +
       facet_wrap(~ ind,ncol=3) +
       viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -1383,13 +1383,13 @@ for(Statistic in c("mean","mode")){
             axis.title = element_blank(),
             legend.key.width=unit(0.1,"npc"))+
       coord_equal()
-    
+
     # Plot Rain ####
     Data <- raster::stack(as.data.frame(raster::getValues(TotRain2)))
-    
+
     Data <- cbind(coords, Data)
-    
-    Rainmap<-ggplot(Data) + 
+
+    Rainmap<-ggplot(Data) +
       geom_tile(aes(x, y, fill = values)) +
       facet_wrap(~ ind,ncol=3) +
       viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -1399,13 +1399,13 @@ for(Statistic in c("mean","mode")){
             axis.title = element_blank(),
             legend.key.width=unit(0.1,"npc"))+
       coord_equal()
-    
+
     # Plot Balance ####
     Data <- raster::stack(as.data.frame(raster::getValues(Balance2)))
-    
+
     Data <- cbind(coords, Data)
-    
-    Balancemap<-ggplot(Data) + 
+
+    Balancemap<-ggplot(Data) +
       geom_tile(aes(x, y, fill = values)) +
       facet_wrap(~ ind,ncol=3) +
       viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -1415,21 +1415,21 @@ for(Statistic in c("mean","mode")){
             axis.title = element_blank(),
             legend.key.width=unit(0.1,"npc"))+
       coord_equal()
-    
+
     # Seasonality Map ####
-    
+
     Ysystem<-terra::rasterize(X,BaseRaster,field="System")
     names(Ysystem)<-"System"
     coords <- xyFromCell(Ysystem, seq_len(ncell(Ysystem)))
     Data <-values(Ysystem)
     names(Ysystem) <- names(Ysystem)
-    
+
     Levels<-data.table(value=sort(unique(Ysystem[!is.na(Ysystem)])),description=levels(Ysystem)[[1]])
-    
+
     Data <- data.frame(cbind(coords, Data))
     Data$System<-Levels$description.category[match(Data$System,Levels$value)]
-    
-    Seasonalitymap<-ggplot(Data) + 
+
+    Seasonalitymap<-ggplot(Data) +
       geom_tile(aes(x, y, fill = System)) +
       viridis::scale_fill_viridis(option="turbo",discrete = T,na.value="transparent",na.translate = F)+
       theme_bw()+
@@ -1439,17 +1439,17 @@ for(Statistic in c("mean","mode")){
             legend.direction = "horizontal")+
       guides(fill=guide_legend(ncol=1))+
       coord_equal()
-    
+
     # Number Seasons Map ####
     Yseasons<-terra::rasterize(X,BaseRaster,field="Seasons")
     names(Yseasons)<-"Seasons"
     coords <- xyFromCell(Yseasons, seq_len(ncell(Yseasons)))
     Data <-values(Yseasons)
     names(Yseasons) <- names(Yseasons)
-    
+
     Data <- data.frame(cbind(coords, Seasons=Data))
-    
-    Noseasons<-ggplot(Data) + 
+
+    Noseasons<-ggplot(Data) +
       geom_tile(aes(x, y, fill = as.factor(Seasons))) +
       viridis::scale_fill_viridis(option="viridis",discrete = T,na.value="transparent",na.translate = F,direction=-1)+
       theme_bw()+
@@ -1461,10 +1461,10 @@ for(Statistic in c("mean","mode")){
       coord_equal()
     # Failed Seasons Map ####
     Data <- raster::stack(as.data.frame(100*(1-raster::getValues(Total.Seasons2))))
-    
+
     Data <- cbind(coords, Data)
-    
-    Failedmap<-ggplot(Data) + 
+
+    Failedmap<-ggplot(Data) +
       geom_tile(aes(x, y, fill = values)) +
       facet_wrap(~ ind,ncol=3) +
       viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -1474,17 +1474,17 @@ for(Statistic in c("mean","mode")){
             axis.title = element_blank(),
             legend.key.width=unit(0.1,"npc"))+
       coord_equal()
-    
+
     # Combine plots and save ####
-    
-  
+
+
     g1<-gridExtra::arrangeGrob(grobs=list(SOSmap,LGPmap,Rainmap),layout_matrix=matrix(rep(1:3,3),nrow = 3))
     g2<-gridExtra::arrangeGrob(grobs=list(SOSdevmap,Failedmap,Balancemap),layout_matrix=matrix(rep(1:3,3),nrow = 3))
     g3<-gridExtra::arrangeGrob(grobs=list(Noseasons,Seasonalitymap),layout_matrix=matrix(c(1,1,2,2,2),ncol = 1))
-      
-    
+
+
     gcomb<-gridExtra::arrangeGrob(grobs=list(g3,g1,g2),layout_matrix=matrix(c(1,2,2,2,3,3,3),nrow = 1))
-    
+
     ggsave(filename = paste0(COUNTRY,".png"),
            plot = gcomb,
            path = PlotDir,
@@ -1495,32 +1495,32 @@ for(Statistic in c("mean","mode")){
            device=png,
            dpi = 600,
            bg="white")
-    
+
   }
-  
+
   # Seasonal - Plot all countries ####
   Files<-list.files(paste0(PlotDir,"/Data"),".RData")
-  
+
   Data<-miceadds::load.Rdata2(filename=Files[1],path=paste0(PlotDir,"/Data"))
-  
+
   SOSData<-data.table::rbindlist(lapply(Files,FUN=function(X){miceadds::load.Rdata2(filename=X,path=paste0(PlotDir,"/Data"))}),use.names = T)
   SOSData[,Seasons:=sum(!is.na(SOS_1),!is.na(SOS_2)),by=list(x,y,Index)]
-  
+
   # prepare coordinates, data, and proj4string
   coords <- data.frame(SOSData[ , c("x", "y")])   # coordinates
   crs    <- CRS("+init=epsg:4326") # proj4string of coords
-  
+
   # make the SpatialPointsDataFrame object
   X <- terra::vect(SOSData,geom=c("x", "y"),crs=terra::crs(CHIRPSrast))
-  
-  BaseRaster<-terra::rast(ncol=SOSData[,length(unique(x))], 
-                          nrow=SOSData[,length(unique(y))], 
-                          xmin=SOSData[,min(x)], 
-                          xmax=SOSData[,max(x)], 
+
+  BaseRaster<-terra::rast(ncol=SOSData[,length(unique(x))],
+                          nrow=SOSData[,length(unique(y))],
+                          xmin=SOSData[,min(x)],
+                          xmax=SOSData[,max(x)],
                           ymin=SOSData[,min(y)],
                           ymax=SOSData[,max(y)])
-  
-  
+
+
   # Seasonal - SOS Map Data ####
   S1<-round(terra::rasterize(X,BaseRaster,field="SOS_1"),0)
   if(SOSData[!is.na(S2),.N==0]){
@@ -1529,20 +1529,20 @@ for(Statistic in c("mean","mode")){
   }else{
     S2<-round(terra::rasterize(X,BaseRaster,field="SOS_2"),0)
   }
-  
+
   Swettest<-round(terra::rasterize(X,BaseRaster,field="Swettest"),0)
-  
+
   SOS<-c(S1,S2,Swettest)
-  
+
   names(SOS)<-c("SOS_1",
                 "SOS_2",
                 "SOS_Wettest")
-  
+
   SOS2<-raster::stack(SOS)
   names(SOS2) <- names(SOS)
-  
+
   coords <- xyFromCell(SOS2, seq_len(ncell(SOS2)))
-  
+
   # Seasonal - SOS Deviance Map Data ####
   SOSdev1<-terra::rasterize(X,BaseRaster,field="SOSdev_1")
   if(SOSData[!is.na(SOSdev2),.N==0]){
@@ -1551,68 +1551,68 @@ for(Statistic in c("mean","mode")){
   }else{
     SOSdev2<-terra::rasterize(X,BaseRaster,field="SOSdev_2")
   }
-  
+
   SOSdev<-c(SOSdev1,SOSdev2)
-  
+
   names(SOSdev)<-c("SOSdev1","SOSdev2")
-  
+
   SOSdev2<-raster::stack(SOSdev)
   names(SOSdev2) <- names(SOSdev)
-  
+
   # Seasonal - LGP Map Data ####
   LGP_1<-round(terra::rasterize(X,BaseRaster,field="LGP_1"),0)
   LGP_2<-round(terra::rasterize(X,BaseRaster,field="LGP_2"),0)
-  
+
   LGP<-c(LGP_1,LGP_2,sum(c(LGP_1,LGP_2),na.rm = T))
-  
+
   names(LGP)<-c("LGP_1",
                 "LGP_2",
                 "LGP_sum")
-  
+
   LGP2<-raster::stack(LGP)
   names(LGP2) <- names(LGP)
-  
+
   # Seasonal - Total Rain Map Data ####
   TotRain1<-round(terra::rasterize(X,BaseRaster,field="Tot.Rain_1"),0)
   TotRain2<-round(terra::rasterize(X,BaseRaster,field="Tot.Rain_2"),0)
   TotRain<-c(TotRain1,TotRain2,sum(c(TotRain1,TotRain2),na.rm = T))
-  
+
   names(TotRain)<-c("TotRain1",
                     "TotRain2",
                     "TotRain_sum")
-  
+
   TotRain2<-raster::stack(TotRain)
   names(TotRain2) <- names(TotRain)
-  
+
   # Seasonal - Balance Map Data ####
   Balance1 <-round(terra::rasterize(X,BaseRaster,field="Balance.mean_1"),0)
   Balance2<-round(terra::rasterize(X,BaseRaster,field="Balance.mean_2"),0)
   Balance<-c(Balance1 ,Balance2,sum(c(Balance1 ,Balance2),na.rm = T))
-  
+
   names(Balance)<-c("Balance1 ",
                     "Balance2",
                     "Balance_sum")
-  
+
   Balance2<-raster::stack(Balance)
   names(Balance2) <- names(Balance)
-  
+
   # Seasonal - Total Seasons Map Data ####
   Total.Seasons1 <-terra::rasterize(X,BaseRaster,field="Total.Seasons_1")
   Total.Seasons2<-terra::rasterize(X,BaseRaster,field="Total.Seasons_2")
   Total.Seasons<-c(Total.Seasons1 ,Total.Seasons2)
   Total.Seasons<-Total.Seasons/NoSeasons
-  
-  names(Total.Seasons)<-c("Prop.Seasons1","Prop.Seasons2")                  
-  
+
+  names(Total.Seasons)<-c("Prop.Seasons1","Prop.Seasons2")
+
   Total.Seasons2<-raster::stack(Total.Seasons)
   names(Total.Seasons2) <- names(Total.Seasons)
-  
+
   # Seasonal - Plot SOS ####
   Data <- raster::stack(as.data.frame(raster::getValues(SOS2)))
   Data <- cbind(coords, Data)
   Data$values<-factor(Data$values,levels=1:36)
-  
-  SOSmap<-ggplot(Data) + 
+
+  SOSmap<-ggplot(Data) +
     geom_tile(aes(x, y, fill = values)) +
     facet_wrap(~ ind,ncol=3) +
     scale_fill_manual(
@@ -1627,7 +1627,7 @@ for(Statistic in c("mean","mode")){
           axis.title = element_blank())+
     guides(fill=guide_legend(nrow=3))+
     coord_equal()
-  
+
   ggsave(filename = "Africa - SOS.png",
          plot = SOSmap,
          path = PlotDir,
@@ -1638,13 +1638,13 @@ for(Statistic in c("mean","mode")){
          dpi = 600,
          device = png,
          bg="white")
-  
+
   # Seasonal - Plot SOS deviance ####
   Data <- raster::stack(as.data.frame(raster::getValues(SOSdev2)))
-  
+
   Data <- cbind(coords, Data)
-  
-  SOSdevmap<-ggplot(Data) + 
+
+  SOSdevmap<-ggplot(Data) +
     geom_tile(aes(x, y, fill = values)) +
     facet_wrap(~ ind,ncol=2) +
     viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -1654,25 +1654,25 @@ for(Statistic in c("mean","mode")){
           axis.title = element_blank(),
           legend.key.width=unit(0.1,"npc"))+
     coord_equal()
-  
+
   ggsave(filename = "Africa - SOSdev.png",
          plot = SOSdevmap,
          path = PlotDir,
          width= 200,
-         height = 200*0.6,      
+         height = 200*0.6,
          units = "mm",
          scale = 1.2,
          dpi = 600,
          device = png,
          bg="white")
-  
+
   # Seasonal - Plot LGP ####
   Data <- raster::stack(as.data.frame(raster::getValues(LGP2)))
   names(LGP2) <- names(LGP)
-  
+
   Data <- cbind(coords, Data)
-  
-  LGPmap<-ggplot(Data) + 
+
+  LGPmap<-ggplot(Data) +
     geom_tile(aes(x, y, fill = values)) +
     facet_wrap(~ ind,ncol=3) +
     viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -1682,24 +1682,24 @@ for(Statistic in c("mean","mode")){
           axis.title = element_blank(),
           legend.key.width=unit(0.1,"npc"))+
     coord_equal()
-  
+
   ggsave(filename = "Africa - LGP.png",
          plot = LGPmap,
          path = PlotDir,
          width= 200,
-         height = 200*0.6,      
+         height = 200*0.6,
          units = "mm",
          scale = 1.2,
          dpi = 600,
          device = png,
          bg="white")
-  
+
   # Seasonal - Plot Rain ####
   Data <- raster::stack(as.data.frame(raster::getValues(TotRain2)))
-  
+
   Data <- cbind(coords, Data)
-  
-  Rainmap<-ggplot(Data) + 
+
+  Rainmap<-ggplot(Data) +
     geom_tile(aes(x, y, fill = values)) +
     facet_wrap(~ ind,ncol=3) +
     viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -1709,24 +1709,24 @@ for(Statistic in c("mean","mode")){
           axis.title = element_blank(),
           legend.key.width=unit(0.1,"npc"))+
     coord_equal()
-  
+
   ggsave(filename = "Africa - Rain.png",
          plot = Rainmap,
          path = PlotDir,
          width= 200,
-         height = 200*0.6,      
+         height = 200*0.6,
          units = "mm",
          scale = 1.2,
          dpi = 600,
          device = png,
          bg="white")
-  
+
   # Seasonal - Plot Balance ####
   Data <- raster::stack(as.data.frame(raster::getValues(Balance2)))
-  
+
   Data <- cbind(coords, Data)
-  
-  Balancemap<-ggplot(Data) + 
+
+  Balancemap<-ggplot(Data) +
     geom_tile(aes(x, y, fill = values)) +
     facet_wrap(~ ind,ncol=3) +
     viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -1736,32 +1736,32 @@ for(Statistic in c("mean","mode")){
           axis.title = element_blank(),
           legend.key.width=unit(0.1,"npc"))+
     coord_equal()
-  
+
   ggsave(filename = "Africa - Balance.png",
          plot = Balancemap,
          path = PlotDir,
          width= 200,
-         height = 200*0.6,      
+         height = 200*0.6,
          units = "mm",
          scale = 1.2,
          dpi = 600,
          device = png,
          bg="white")
-  
+
   # Seasonal - Plot Seasonality ####
-  
+
   Ysystem<-terra::rasterize(X,BaseRaster,field="System")
   names(Ysystem)<-"System"
   coords <- xyFromCell(Ysystem, seq_len(ncell(Ysystem)))
   Data <-values(Ysystem)
   names(Ysystem) <- names(Ysystem)
-  
+
   Levels<-data.table(value=sort(unique(Ysystem[!is.na(Ysystem)])),description=levels(Ysystem)[[1]])
-  
+
   Data <- data.frame(cbind(coords, Data))
   Data$System<-Levels$description.category[match(Data$System,Levels$value)]
-  
-  Seasonalitymap<-ggplot(Data) + 
+
+  Seasonalitymap<-ggplot(Data) +
     geom_tile(aes(x, y, fill = System)) +
     viridis::scale_fill_viridis(option="turbo",discrete = T,na.value="transparent",na.translate = F)+
     theme_bw()+
@@ -1771,28 +1771,28 @@ for(Statistic in c("mean","mode")){
           legend.direction = "horizontal")+
     guides(fill=guide_legend(ncol=1))+
     coord_equal()
-  
+
   ggsave(filename = "Africa - Seasonality.png",
          plot = Seasonalitymap,
          path = PlotDir,
          width= 200,
-         height = 200,      
+         height = 200,
          units = "mm",
          scale = 1.2,
          dpi = 600,
          device = png,
          bg="white")
-  
+
   # Seasonal - Plot Number Seasons ####
   Yseasons<-terra::rasterize(X,BaseRaster,field="Seasons")
   names(Yseasons)<-"Seasons"
   coords <- xyFromCell(Yseasons, seq_len(ncell(Yseasons)))
   Data <-values(Yseasons)
   names(Yseasons) <- names(Yseasons)
-  
+
   Data <- data.frame(cbind(coords, Seasons=Data))
-  
-  Noseasons<-ggplot(Data) + 
+
+  Noseasons<-ggplot(Data) +
     geom_tile(aes(x, y, fill = as.factor(Seasons))) +
     viridis::scale_fill_viridis(option="viridis",discrete = T,na.value="transparent",na.translate = F,direction=-1)+
     theme_bw()+
@@ -1802,24 +1802,24 @@ for(Statistic in c("mean","mode")){
           legend.direction = "horizontal")+
     guides(fill=guide_legend(ncol=2))+
     coord_equal()
-  
+
   ggsave(filename = "Africa - NoSeasons.png",
          plot = Noseasons,
          path = PlotDir,
          width= 200,
-         height = 200,      
+         height = 200,
          units = "mm",
          scale = 1.2,
          dpi = 600,
          device = png,
          bg="white")
-  
+
   # Seasonal - Plot Failed Seasons ####
   Data <- raster::stack(as.data.frame(100*(1-raster::getValues(Total.Seasons2))))
-  
+
   Data <- cbind(coords, Data)
-  
-  Failedmap<-ggplot(Data) + 
+
+  Failedmap<-ggplot(Data) +
     geom_tile(aes(x, y, fill = values)) +
     facet_wrap(~ ind,ncol=3) +
     viridis::scale_fill_viridis(option="viridis",discrete = F,direction = -1,na.value = "transparent") +
@@ -1829,28 +1829,28 @@ for(Statistic in c("mean","mode")){
           axis.title = element_blank(),
           legend.key.width=unit(0.1,"npc"))+
     coord_equal()
-  
+
   ggsave(filename = "Africa - FailedSeasons.png",
          plot = Failedmap,
          path = PlotDir,
          width= 200,
-         height = 200*0.6,      
+         height = 200*0.6,
          units = "mm",
          scale = 1.2,
          dpi = 600,
          device = png,
          bg="white")
-  
+
   # Seasonal - Combine plots and save ####
-  
-  
+
+
   g1<-gridExtra::arrangeGrob(grobs=list(SOSmap,LGPmap,Rainmap),layout_matrix=matrix(rep(1:3,3),nrow = 3))
   g2<-gridExtra::arrangeGrob(grobs=list(SOSdevmap,Failedmap,Balancemap),layout_matrix=matrix(rep(1:3,3),nrow = 3))
   g3<-gridExtra::arrangeGrob(grobs=list(Noseasons,Seasonalitymap),layout_matrix=matrix(c(1,1,2,2,2),ncol = 1))
-  
-  
+
+
   gcomb<-gridExtra::arrangeGrob(grobs=list(g3,g1,g2),layout_matrix=matrix(c(1,2,2,2,3,3,3),nrow = 1))
-  
+
   ggsave(filename = "Africa - Combined.png",
          plot = gcomb,
          path = PlotDir,
