@@ -1,30 +1,33 @@
-#' Download and Unzip Function
+#' Downloads and unzips a file
 #'
-#' This function downloads a .gz file from an input URL and then unzips the file to a destination folder.
-#' The compressed file is then removed from the system.
+#' This function downloads a file from a specified URL and optionally unzips it to a destination folder.
 #'
-#' @param url A character vector specifying the url address of the .gz file to download.
-#' @param destination A character vector specifying the location and filename where the downloaded and unzipped file should be saved.
-#' @param quiet A logical parameter to suppress messages or not during download (default=FALSE)
+#' @param url character string specifying the URL of the file to be downloaded
+#' @param filename character string specifying the name of the file to be saved.
+#' @param destname character string specifying the name of the output file after unzipping.
+#' @param quiet logical indicating whether to display download progress messages.
+#' @param unzip logical indicating whether to unzip the downloaded file, default is TRUE.
+#' @param remove logical indicating whether to remove the .gz file after unzipping, default is TRUE.
 #'
-#' @return Returns the unzipped file.
+#' @return NULL
 #'
 #' @examples
-#' download_and_unzip("https://example.com/data.gz", "downloads/data.csv")
+#' # Download and unzip a file
+#' url <- "https://cran.r-project.org/src/contrib/Archive/dplyr/dplyr_0.8.0.tar.gz"
+#' download_and_unzip(url, "dplyr_0.8.0.tar.gz", "dplyr")
 #'
-#' @importFrom tools gunzip
-#' @importFrom base download.file
-#'
+#' @import R.utils
+#' @importFrom utils download.file
 #' @export
-download_and_unzip <- function(url, destination,quiet=T) {
+
+download_and_unzip <- function(url, filename, destname, quiet = TRUE, unzip = T, remove = T) {
+
   # Download the .gz file
-  download.file(url, destfile = destination, mode = "wb",quiet=quiet)
+  download.file(url, destfile = filename, mode = "wb", quiet = quiet)
 
   # Unzip the .gz file
-  unzipped_file <- tools::gunzip(destination, overwrite = TRUE)
+  if (unzip) {
+    R.utils::gunzip(filename = filename, destname = destname, overwrite = TRUE, remove = remove)
+  }
 
-  # Remove the compressed file
-  file.remove(destination)
-
-  return(unzipped_file)
 }
