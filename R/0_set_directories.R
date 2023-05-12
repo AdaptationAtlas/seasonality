@@ -3,7 +3,7 @@ if(!require(pacman)){
   library(pacman)
 }
 
-packages<-c()
+packages<-c("devtools")
 
 pacman::p_load(packages)
 
@@ -28,3 +28,11 @@ chirts_dir<-paste0(data_dir,"/chirts/raw")
 if(!dir.exists(output_dir)){
   dir.create(output_dir,recursive = T)
 }
+
+# Starting conditions
+# Is chirps dataset downloaded and complete?
+chirps_dl<-T
+# Is hobbins_ref_et dataset downloaded and complete?
+hobbins_dl<-T
+# Is chirts dataset downloaded and complete?
+chirts_dl<-F
