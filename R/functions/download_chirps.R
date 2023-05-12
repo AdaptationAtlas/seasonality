@@ -29,7 +29,7 @@ download_chirps<-function(start_year=1980,end_year=2022,end_day=365,save_dir=chi
     }
 
     # Set the correct number of days in leap years
-    if(end_day==365 & YEAR %in% seq(1978,2100,4)){ # if the end day is 365 and the year is a leap year
+    if(end_day==365 & YEAR %in% seq(1980,2096,4)){ # if the end day is 365 and the year is a leap year
       end_day<-366 # set the end day to 366
     }
 
