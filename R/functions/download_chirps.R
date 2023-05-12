@@ -58,6 +58,11 @@ download_chirps<-function(start_year=1980,end_year=2022,end_day=365,save_dir=chi
         cat('\r',paste0("Downloading file: ",FILE2))
         flush.console()
         try(download.file(URL2, destfile2,quiet=quiet))
+      }else{
+        # Display progress
+        cat('\r                                                                                                                                          ')
+        cat('\r',paste0("File present: ",FILE2))
+        flush.console()
       }
     }
   }
