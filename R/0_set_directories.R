@@ -8,7 +8,7 @@ packages<-c("devtools")
 pacman::p_load(packages)
 
 
-if(F){
+if(T){
 # CGlabs
 data_dir<-"/home/jovyan/common_data"
 output_dir<-"/home/jovyan/common_data/atlas_sos"
@@ -36,3 +36,7 @@ chirps_dl<-T
 hobbins_dl<-T
 # Is chirts dataset downloaded and complete?
 chirts_dl<-F
+
+# If you need to set up github token
+usethis::create_github_token()
+gitcreds::gitcreds_set()
