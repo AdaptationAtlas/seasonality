@@ -7,6 +7,8 @@
 #' @param end_day The day to stop downloading data at for end_year. Default is 365.
 #' @param save_dir The directory to save the downloaded data to. Default is chirps_dir.
 #' @param quiet A logical parameter to suppress messages or not during download. Default is FALSE.
+#' @param unzip whether or not to unzip the downloaded files (defaults to TRUE)
+#' @param remove whether or not to remove the original downloaded compressed files (defaults to TRUE)
 #' @return This function downloads CHIRPS dataset for the specified time period in the directory specified by save_dir variable.
 #' @export
 download_chirps<-function(start_year=1980,end_year=2022,end_day=365,save_dir=chirps_dir,quiet=F){
@@ -47,7 +49,6 @@ download_chirps<-function(start_year=1980,end_year=2022,end_day=365,save_dir=chi
 
       # Set the URL and destination file variables
       URL<-paste0(URLmaster,YEAR,"/",FILE) # set the URL
-      URL2<-paste0(URLmaster,YEAR,"/",FILE2) # set the URL
       destfile<-paste0(save_dir,"/",FILE) # set the destination file
       destfile2<-paste0(save_dir,"/",FILE2) # set the destination file
 
@@ -55,9 +56,11 @@ download_chirps<-function(start_year=1980,end_year=2022,end_day=365,save_dir=chi
       if(!(file.exists(destfile)|file.exists(destfile2))){
         # Display progress
         cat('\r                                                                                                                                          ')
-        cat('\r',paste0("Downloading file: ",FILE2))
+        cat('\r',paste0("Downloading file: ",FILE))
         flush.console()
-        try(download.file(URL2, destfile2,quiet=quiet))
+
+        try(download_and_unzip(URL, filename=destfile,destname=destfile2,quiet=quiet,unzip=unzip,remove=remove))
+
       }else{
         # Display progress
         cat('\r                                                                                                                                          ')
