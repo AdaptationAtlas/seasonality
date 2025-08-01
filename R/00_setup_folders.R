@@ -13,13 +13,20 @@ if (!dir.exists(root)) {
   stop("⚠️  ANAlOGUE_DATA_ROOT does not exist.")
 }
 
-
 dirs <- list(
   chirps_v3="climate_raw/chirps/chirps_v3_cog",
   chirts_era5_max="climate_raw/chirts_era5/tmax_cog",
   chirts_era5_min="climate_raw/chirts_era5/tmin_cog",
+  agera5_v2="climate_raw/agera5_v2",
   hobbins_ref_et="climate_raw/hobbins_ref_et",
+  boundaries="static_raw/boundaries",
+  srtm="static_raw/strm",
+  soilgrids="static_raw/soilgrids",
+  isda="static_raw/isda",
+  glass_ndvi="climate_raw/glass_ndvi",
+  glass_ndvi_tif="climate_raw/glass_ndvi_tif",
   onset="climate_derived/onset",
+  nvdi_phenology="climate_derived/glass_phenology",
   seasonal="climate_derived/seasonal",
   similarity="climate_derived/similarity",
   rf_forests="models/rf_forests",
@@ -61,4 +68,9 @@ xmin  =  -26,   # 26 ° W  (just west of Cabo Verde)
 xmax  =   64,   # 64 ° E  (just east of Rodrigues at 63.4 ° E)
 ymin  =  -35,  # 35 ° S  (a bit south of Cape Agulhas at 34.8 ° S)
 ymax  =   38   # 38 ° N  (north of Morocco’s northern tip at 35.9 ° N)
+)
+
+af_v <- terra::vect(
+  terra::ext(af_bbox["xmin"], af_bbox["xmax"], af_bbox["ymin"], af_bbox["ymax"]),
+  crs = "EPSG:4326"
 )

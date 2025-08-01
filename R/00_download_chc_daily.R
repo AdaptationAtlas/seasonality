@@ -153,6 +153,7 @@ download_chc_daily <- function(start_year, end_year, out_dir,
   # parallel + progressr
   future::plan(multisession, workers = workers)
   handlers(global = TRUE); handlers("progress")
+
   results <- progressr::with_progress({
     p <- progressr::progressor(length(dates))
     future.apply::future_lapply(dates, function(dd) { r <- one_day(dd); p(); r },
@@ -316,7 +317,7 @@ get_hobbins_refet <- function(start_year,
     bb_opt <- if (is.null(bbox)) character() else {
       c("-projwin",
         as.character(bbox[1]), as.character(bbox[4]),
-        as.character(bbox[3]), as.character(bbox[2]))
+        as.character(bbox[2]), as.character(bbox[3]))
     }
 
     tmp1 <- tempfile(fileext = ".tif")
