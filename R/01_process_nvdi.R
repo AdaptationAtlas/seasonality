@@ -13,6 +13,12 @@
 #' - Zhang, X., et al. (2003). Monitoring vegetation phenology using MODIS. Remote Sensing of Environment. [DOI: 10.1016/S0034-4257(03)00084-6]
 #' - Chen, J., et al. (2023). GLASS NDVI and EVI V1.0 Dataset Description. [DOI: 10.6084/m9.figshare.22220050]
 
+#' - First run:
+#' 00_setup_folders.R
+#' 00_download_glass_nvdi.R
+#' 00_download_datasets.R
+#' 01_process_chirps.R
+
 # Libraries ####
 #' @import data.table terra future.apply progressr phenofit
 
@@ -34,7 +40,8 @@ pacman::p_load(
   miceadds,
   geoarrow,
   sf,
-  miceadds
+  miceadds,
+  s3fs
 )
 
 # phenofit
@@ -437,7 +444,7 @@ plot(stacked_seasons[[grep("failed_seasons",names(stacked_seasons),value=T)]])
 # - Cross-validate against rainfall onset
 # - Compare duration between green-up and green-down as proxy for season length
 
-# 8) Save country subsets ####
+# 8) Create country subsets ####
 
 save_dir<-file.path(dirs$nvdi_phenology,"countries")
 if(!dir.exists(save_dir)){dir.create(save_dir)}
@@ -511,5 +518,108 @@ for(country in countries){
   # Save result
   write_parquet(country_dat,save_file)
 }
+
+# 8.1) Merge rainfall data with country subsets ####
+chirps_dir<-file.path(dirname(dirs$chirps_v3),paste0(basename(dirs$chirps_v3),"_countries"))
+
+for(i in 1:length(countries)){
+  country<-countries[i]
+  cat("Processing",country,i,"/",length(countries),"         \r")
+  nvdi_file<-file.path(save_dir,paste0(country,"_seasonal-phenology.parquet"))
+  chirps_file<-file.path(chirps_dir,paste0(country,".parquet"))
+  save_file<-file.path(save_dir,paste0(country,"_seasonal-phenology_plus-rain.parquet"))
+
+  if(!file.exists(save_file)){
+   nvdi_dat<-read_parquet(nvdi_file)
+   chirps_dat<-read_parquet(chirps_file)
+
+   setDT(chirps_dat)
+   setDT(nvdi_dat)
+
+   # Convert to compact date type
+   date_cols <- names(which(sapply(nvdi_dat, function(x) class(x)[1] == "Date")))
+   nvdi_dat[, (date_cols) := lapply(.SD, function(x) as.IDate(as.character(x))),
+            .SDcols = date_cols]
+
+   chirps_dat[, date2 := as.IDate(date[1], format = "%Y-%m-%d"),by=date]
+   chirps_dat[, date3 := as.IDate(date2[1]),by=date2]
+   chirps_dat[,c("date","date2"):=NULL]
+   setnames(chirps_dat,"date3","date")
+
+   # Helpful index for speed on the big table
+   setkey(chirps_dat, pixel, date)
+
+   # Assign the season flag to CHIRPS rows within the TRS2 interval (inclusive)
+   chirps_dat[
+     nvdi_dat,
+     on = .(pixel, date >= TRS2.sos, date <= TRS2.eos),
+     flag := i.flag
+   ]
+
+   chirps_trs2<-chirps_dat[!is.na(flag),.(rain_trs2=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
+
+   chirps_dat[,flag:=NULL
+              ][nvdi_dat,
+                on = .(pixel, date >= TRS5.sos, date <= TRS5.eos),
+                flag := i.flag
+                ]
+
+   chirps_trs5<-chirps_dat[!is.na(flag),.(rain_trs5=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
+
+   chirps_dat[,flag:=NULL
+   ][nvdi_dat,
+     on = .(pixel, date >= DER.sos, date <= DER.eos),
+     flag := i.flag
+   ]
+
+   chirps_der<-chirps_dat[!is.na(flag),.(rain_der=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
+
+
+   chirps_dat[,flag:=NULL
+   ][nvdi_dat[!is.na(Greenup) & !is.na(Senescence)],
+     on = .(pixel, date >= Greenup, date <= Senescence),
+     flag := i.flag
+   ]
+
+   chirps_gs<-chirps_dat[!is.na(flag),.(rain_gs=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
+
+   # Merge back rainfall
+   nvdi_dat[chirps_trs2,
+     on = .(pixel, flag),
+     rain_trs2:= i.rain_trs2]
+
+   nvdi_dat[chirps_trs5,
+            on = .(pixel, flag),
+            rain_trs5 := i.rain_trs5]
+
+   nvdi_dat[chirps_gs,
+            on = .(pixel, flag),
+            rain_greenup_scenescence := i.rain_gs]
+
+   nvdi_dat[chirps_der,
+            on = .(pixel, flag),
+            rain_der := i.rain_der]
+
+   write_parquet(nvdi_dat,save_file)
+
+  }
+
+}
+
+  ## 8.2) Upload to S3 ####
+# Includes functions to upload data to S3 bucket
+source("https://raw.githubusercontent.com/AdaptationAtlas/hazards_prototype/refs/heads/main/R/haz_functions.R")
+
+s3_bucket<-"s3://digital-atlas/domain=phenology/type=sos_eos/source=glass_nvdi/region=africa/processing=raw/level=adm1/"
+folder_local<-file.path(dirs$nvdi_phenology,"countries")
+
+files<-list.files(folder_local,full.names = T,recursive=F,include.dirs = F)
+
+upload_files_to_s3(files = files,
+                   selected_bucket=s3_bucket,
+                   max_attempts = 3,
+                   overwrite=F,
+                   mode="public-read")
+
 
 # End of Script ####
