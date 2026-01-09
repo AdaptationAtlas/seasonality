@@ -1,3 +1,41 @@
+# Script purpose ####
+#
+# This script converts CHIRPS v3 daily rainfall GeoTIFFs into country-level Parquet
+# tables aligned to the NDVI/phenology pixel grid. For each admin0 country (iso3),
+# it crops/masks rainfall to the country boundary, resamples rainfall onto the
+# NDVI pixel raster (so each cell carries the NDVI `pixel` ID), then converts the
+# resulting raster stack to a long-format data.table with one row per
+# (x, y, pixel, date) rainfall value.
+#
+# Key processing steps (per country):
+#   1) Load admin0 polygon for the iso3 country.
+#   2) Crop + mask the NDVI pixel map to the country.
+#   3) Crop CHIRPS rainfall stack to the country.
+#   4) Resample rainfall to the NDVI pixel grid, then mask to the country.
+#   5) Convert to data.table, melt to long format, enforce date type, and round rain.
+#   6) If the expected output row count is too large, split by pixel groups and
+#      write multiple Parquet chunks (ISO3_1.parquet, ISO3_2.parquet, ...).
+#
+# Outputs
+#
+# Parquet files are written to: <dirs$chirps_v3>/<chirps_v3_basename>_countries/
+# Outputs are either:
+#   - ISO3.parquet (most countries), or
+#   - ISO3_1.parquet, ISO3_2.parquet, ... (very large countries)
+#
+# Each Parquet contains:
+#   x, y   : lon/lat (EPSG:4326)
+#   pixel  : NDVI pixel ID (for joining to NDVI/phenology tables)
+#   date   : daily date derived from CHIRPS filenames
+#   rain   : daily rainfall (rounded to 2 decimals)
+#
+# Notes / limitations
+#
+# - The rainfall stack is resampled to match the NDVI pixel grid; this enables
+#   direct merges on (pixel, date) with NDVI-derived datasets.
+# - Work is skipped if output Parquet(s) already exist for a country.
+# - Very large countries may still be slow because the raster-to-table extraction
+#   happens before chunking; chunking primarily avoids write/row-limit issues.
 
 # Load packages ####
 pacman::p_load(
@@ -125,7 +163,7 @@ for(i in 1:length(countries)){
       chunks<-1
     }
 
-    if(!file.exists(save_file)){
+    if(!file.exists(save_file[1])){
       u <- sort(unique(rain_dt$pixel))
       pixel_chunks <- split(u, ceiling(seq_along(u) / ceiling(length(u)/chunks)))
 

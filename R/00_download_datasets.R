@@ -1,6 +1,7 @@
 # load the module
 source("R/00_download_chc_daily.R")
 source("R/00_get_agera5_v2.R")
+source("R/00_setup_folders.R")
 
 # Load packages
 if (!requireNamespace("pacman", quietly=TRUE)) install.packages("pacman")
@@ -109,7 +110,7 @@ poly_sf_feature <- st_sf( geometry = poly_sf )
 # and large‐scale slope/aspect. A 1 km DEM captures those gradients just fine, and won’t artificially introduce noise
 # that your climate layers can’t “see.”
 
-dem_30m <- get_elev_raster(
+dem <- get_elev_raster(
   locations = poly_sf_feature,
   z       = 7,          # ~1.2km
   clip    = "bbox",      # crop exactly to the bbox you gave
@@ -118,9 +119,9 @@ dem_30m <- get_elev_raster(
 )
 
 # inspect / save
-plot(dem_30m)
-terra::writeRaster(dem_30m,
-                   filename = file.path(dirs$srtm,"DEM_SRTM_30m_Africa.tif"),
+plot(dem)
+terra::writeRaster(dem,
+                   filename = file.path(dirs$srtm,"DEM_SRTM_Africa.tif"),
                    overwrite=TRUE)
 
 # 7) Download soilgrids ####
@@ -153,7 +154,7 @@ pblapply(tolower(vars),FUN=function(var){
 })
 
 # 8) Download GLASS NDVI ####
-  ## 8.1) Download hdf filee ####
+  ## 8.1) Download hdf file ####
   # PDF https://www.glass.hku.hk/pdf/algorithms/NDVI/Improved%20global%20250%20m%208-day%20NDVI%20and%20EVI%20products%20from%202000%E2%80%932021%20using%20the%20LSTM%20model.pdf
 
   for(year in 2000:2024){
@@ -201,3 +202,88 @@ pblapply(tolower(vars),FUN=function(var){
       s3$file_download(s3_files[i],file)
     }
   })
+
+# 10) Download LULC ####
+  # You will need to download manually from:
+    # https://cds.climate.copernicus.eu/datasets/satellite-land-cover?tab=download
+    # year = 2022
+    # version = v2.1.1
+
+# 11) Download Aridity Index (AI) ####
+# Source: Global Aridity Index & ET0 Database v3 (Zomer et al. 2022) on Figshare
+# (annual AI raster, 30 arc-sec). See dataset/readme for variable naming.   [oai_citation:3‡figshare.com](https://figshare.com/articles/dataset/Global_Aridity_Index_and_Potential_Evapotranspiration_ET0_Climate_Database_v2/7504448?utm_source=chatgpt.com)
+
+download_figshare_zip_by_doi <- function(doi, zip_name, dest_zip, overwrite = FALSE) {
+  article_id <- sub("^.*figshare\\.(\\d+)\\..*$", "\\1", doi)
+  if (!grepl("^[0-9]+$", article_id)) stop("Could not parse Figshare article id from DOI: ", doi)
+
+  api  <- sprintf("https://api.figshare.com/v2/articles/%s", article_id)
+  meta <- jsonlite::fromJSON(api)
+  files <- meta$files
+
+  hit <- files[files$name == zip_name, ]
+  if (!nrow(hit)) {
+    stop("ZIP not found: ", zip_name, "\nAvailable:\n- ", paste(files$name, collapse = "\n- "))
+  }
+
+  if (file.exists(dest_zip) && !overwrite) return(normalizePath(dest_zip))
+  dir.create(dirname(dest_zip), recursive = TRUE, showWarnings = FALSE)
+  if (file.exists(dest_zip) && overwrite) file.remove(dest_zip)
+
+  # ---- robust download for big files (curl resume + retries) ----
+  url <- hit$download_url[1]
+
+  cmd <- sprintf(
+    "curl -L --fail --retry 10 --retry-delay 5 --connect-timeout 30 --max-time 0 -C - -o %s %s",
+    shQuote(dest_zip), shQuote(url)
+  )
+  status <- system(cmd)
+  if (status != 0) stop("curl download failed (status ", status, ").")
+
+  normalizePath(dest_zip)
+}
+
+extract_and_find_tif <- function(zip_path, out_dir, tif_pattern = "\\.tif$") {
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  unzip(zip_path, exdir = out_dir)
+
+  tifs <- list.files(out_dir, pattern = tif_pattern, recursive = TRUE, full.names = TRUE)
+  if (!length(tifs)) stop("No GeoTIFFs found after unzip in: ", out_dir)
+
+  tifs
+}
+
+ai_doi <- "10.6084/m9.figshare.7504448.v4"
+
+zip_name <- "Global-AI_ET0__annual_v3_1.zip"
+zip_path <- file.path(dirs$aridity, zip_name)
+
+zip_path <- download_figshare_zip_by_doi(
+  doi = ai_doi,
+  zip_name = zip_name,
+  dest_zip = zip_path,
+  overwrite = TRUE
+)
+
+unzip_dir <- file.path(dirs$aridity, "Global-AI_ET0__annual_v3_1")
+tifs <- extract_and_find_tif(zip_path, unzip_dir)
+unlink(zip_path)  # clean up zip
+
+ai_tif <- tifs[grepl("AI", basename(tifs), ignore.case = TRUE) &
+              !grepl("ET0|PET", basename(tifs), ignore.case = TRUE)][1]
+
+if (is.na(ai_tif) || !nzchar(ai_tif)) {
+  stop("Could not uniquely identify AI GeoTIFF. Candidate files:\n- ", paste(basename(tifs), collapse="\n- "))
+}
+
+ai_r <- terra::rast(ai_tif)
+ai_r_crop<-terra::crop(ai_r,af_v)
+terra::writeRaster(ai_r_crop,
+            filename = file.path(dirs$aridity,"Global_Aridity_Index_Africa.tif"),
+            overwrite=TRUE)
+
+unlink(dirname(ai_tif), recursive = TRUE)  # clean up unzipped files
+plot(ai_r_crop)
+rm(ai_r, ai_r_crop)
+
+

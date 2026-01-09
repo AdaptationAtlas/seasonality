@@ -1,4 +1,4 @@
-# 1) NDVI Green-Up Detection Workflow for Africa ####
+# NDVI Green-Up Detection Workflow for Africa ####
 # Project: Africa Agriculture Adaptation Atlas (AAAA)
 # PI: Pete Steward | p.steward@cgiar.org | ORCID: 0000-0003-3985-4911
 # Organization: Alliance of Bioversity International & CIAT
@@ -19,10 +19,10 @@
 #' 00_download_datasets.R
 #' 01_process_chirps.R
 
-# Libraries ####
+# 1) Libraries ####
 #' @import data.table terra future.apply progressr phenofit
 
-## 1.1) Loading Required Packages ####
+  # 1.1) Loading Required Packages & Sourcing Functions ####
 
 pacman::p_load(
   arrow,
@@ -46,7 +46,9 @@ pacman::p_load(
 
 # phenofit
 # DOI: 10.1002/joc.6081
-source("R/01_calc_pixel_greenup.R")
+source("R/functions/calc_pixel_greenup.R")
+source("https://raw.githubusercontent.com/AdaptationAtlas/hazards_prototype/refs/heads/main/R/haz_functions.R")
+
 
 # 2) Parameters ####
 input_dir <- dirs$glass_ndvi_tif
@@ -445,11 +447,12 @@ plot(stacked_seasons[[grep("failed_seasons",names(stacked_seasons),value=T)]])
 # - Compare duration between green-up and green-down as proxy for season length
 
 # 8) Create country subsets ####
-
+  ## 8.1) Set save dir ####
 save_dir<-file.path(dirs$nvdi_phenology,"countries")
 if(!dir.exists(save_dir)){dir.create(save_dir)}
 
-file<-list.files(dirs$nvdi_phenology,"pixel_index",full.names = T)
+  ## 8.2) Load pixel index ####
+file<-list.files(dirs$nvdi_phenology,"pixel_index.parquet",full.names = T)
 pixel_index<-read_parquet(file)
 
 pixel_map <- rast(
@@ -460,6 +463,7 @@ pixel_map <- rast(
 #  Assign values using the pixel column
 values(pixel_map) <- pixel_index$pixel
 
+  ## 8.3) Load admin areas ####
 # Admin 0 map
 africa0<-list.files(dirs$boundaries,"_a0_",full.names = T)
 africa0<-read_parquet(africa0)
@@ -475,6 +479,7 @@ africa1<-read_parquet(africa1)
 africa1_sf <- st_as_sf(africa1)
 africa1_vect <- vect(africa1_sf)
 
+  ## 8.4) Loop through countries ####
 countries<-sort(unique(africa0_vect$iso3))
 
 for(country in countries){
@@ -519,7 +524,22 @@ for(country in countries){
   write_parquet(country_dat,save_file)
 }
 
-# 8.1) Merge rainfall data with country subsets ####
+  ## 8.5) Merge rainfall data with country subsets ####
+
+# longest run of days with rain < dry_thresh within a window
+cdd_max <- function(date, rain, dry_thresh = 1) {
+  if (length(rain) == 0L) return(NA_integer_)
+
+  o   <- order(date)
+  v   <- rain[o]
+  dry <- !is.na(v) & v < dry_thresh  # TRUE = dry day
+
+  if (!any(dry)) return(0L)
+
+  r <- rle(dry)
+  max(r$lengths[r$values])
+}
+
 chirps_dir<-file.path(dirname(dirs$chirps_v3),paste0(basename(dirs$chirps_v3),"_countries"))
 
 for(i in 1:length(countries)){
@@ -541,6 +561,13 @@ for(i in 1:length(countries)){
    nvdi_dat[, (date_cols) := lapply(.SD, function(x) as.IDate(as.character(x))),
             .SDcols = date_cols]
 
+   nvdi_dat[, TRS2_sos_p30 := TRS2.sos + 29L
+            ][, TRS2_sos_p45 := TRS2.sos + 44L
+              ][, DER_sos_p30 := DER.sos + 29L
+                ][, DER_sos_p45 := DER.sos + 44L
+                  ][, Greenup_p30 := Greenup + 29L
+                    ][, Greenup_p45 := Greenup + 44L]
+
    chirps_dat[, date2 := as.IDate(date[1], format = "%Y-%m-%d"),by=date]
    chirps_dat[, date3 := as.IDate(date2[1]),by=date2]
    chirps_dat[,c("date","date2"):=NULL]
@@ -559,12 +586,20 @@ for(i in 1:length(countries)){
    chirps_trs2<-chirps_dat[!is.na(flag),.(rain_trs2=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
 
    chirps_dat[,flag:=NULL
-              ][nvdi_dat,
-                on = .(pixel, date >= TRS5.sos, date <= TRS5.eos),
+                ][nvdi_dat,
+                on = .(pixel, date >= TRS2.sos, date <= TRS2_sos_p30),
                 flag := i.flag
                 ]
 
-   chirps_trs5<-chirps_dat[!is.na(flag),.(rain_trs5=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
+   chirps_trs2_p30<-chirps_dat[!is.na(flag),.(rain_trs2_p30=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
+
+   chirps_dat[, flag := NULL
+   ][nvdi_dat,
+     on = .(pixel, date >= TRS2.sos, date <= TRS2_sos_p45),
+     flag := i.flag
+     ]
+
+   chirps_trs2_cdd45 <- chirps_dat[!is.na(flag),.(cdd_trs2_p45=cdd_max(date,value,dry_thresh = 1)),by = .(x, y, pixel, flag)]
 
    chirps_dat[,flag:=NULL
    ][nvdi_dat,
@@ -573,6 +608,22 @@ for(i in 1:length(countries)){
    ]
 
    chirps_der<-chirps_dat[!is.na(flag),.(rain_der=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
+
+   chirps_dat[,flag:=NULL
+   ][nvdi_dat,
+     on = .(pixel, date >= DER.sos, date <= DER_sos_p30),
+     flag := i.flag
+   ]
+
+   chirps_der_p30<-chirps_dat[!is.na(flag),.(rain_der_p30=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
+
+   chirps_dat[, flag := NULL
+   ][nvdi_dat,
+     on = .(pixel, date >= DER.sos, date <= DER_sos_p45),
+     flag := i.flag
+   ]
+
+   chirps_der_cdd45 <- chirps_dat[!is.na(flag),.(cdd_der_p45=cdd_max(date,value,dry_thresh = 1)),by = .(x, y, pixel, flag)]
 
 
    chirps_dat[,flag:=NULL
@@ -583,22 +634,61 @@ for(i in 1:length(countries)){
 
    chirps_gs<-chirps_dat[!is.na(flag),.(rain_gs=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
 
+   chirps_dat[,flag:=NULL
+   ][nvdi_dat[!is.na(Greenup)],
+     on = .(pixel, date >= Greenup, date <= Greenup_p30),
+     flag := i.flag
+   ]
+
+   chirps_gs_p30<-chirps_dat[!is.na(flag),.(rain_gs_p30=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
+
+   chirps_dat[, flag := NULL
+   ][nvdi_dat,
+     on = .(pixel, date >= Greenup, date <= Greenup_p45),
+     flag := i.flag
+   ]
+
+   chirps_gs_cdd45 <- chirps_dat[!is.na(flag),.(cdd_gs_p45=cdd_max(date,value,dry_thresh = 1)),by = .(x, y, pixel, flag)]
+
+
    # Merge back rainfall
    nvdi_dat[chirps_trs2,
      on = .(pixel, flag),
      rain_trs2:= i.rain_trs2]
 
-   nvdi_dat[chirps_trs5,
+   nvdi_dat[chirps_trs2_p30,
             on = .(pixel, flag),
-            rain_trs5 := i.rain_trs5]
+            rain_trs2_p30 := i.rain_trs2_p30]
+
+   nvdi_dat[chirps_trs2_cdd45,
+            on = .(pixel, flag),
+            cdd_trs2_p45 := i.cdd_trs2_p45]
 
    nvdi_dat[chirps_gs,
             on = .(pixel, flag),
             rain_greenup_scenescence := i.rain_gs]
 
+   nvdi_dat[chirps_gs_p30,
+            on = .(pixel, flag),
+            rain_greenup_p30 := i.rain_gs_p30]
+
+   nvdi_dat[chirps_gs_cdd45,
+            on = .(pixel, flag),
+            cdd_greenup_p45 := i.cdd_gs_p45]
+
    nvdi_dat[chirps_der,
             on = .(pixel, flag),
             rain_der := i.rain_der]
+
+   nvdi_dat[chirps_der_p30,
+            on = .(pixel, flag),
+            rain_der_p30 := i.rain_der_p30]
+
+   nvdi_dat[chirps_der_cdd45,
+            on = .(pixel, flag),
+            cdd_der_p45 := i.cdd_der_p45]
+
+   nvdi_dat[,c("TRS2_sos_p30","TRS2_sos_p45","DER_sos_p30","DER_sos_p45","Greenup_p30","Greenup_p45"):=NULL]
 
    write_parquet(nvdi_dat,save_file)
 
@@ -606,9 +696,105 @@ for(i in 1:length(countries)){
 
 }
 
-  ## 8.2) Upload to S3 ####
+  ## 8.6) Merge land-use, livestock density and map spam datasets with pixel index ####
+    ## 8.6.1) Land-use ####
+    file<-list.files(dirs$lulc,".nc",full.names = T)
+    lulc<-terra::rast(file)
+    lulc<-lulc$lccs_class
+    lulc <- resample(lulc, pixel_map, method="mode")
+    names(lulc)<-"lulc"
+    unique(values(lulc))
+
+    lulc_classes <- data.table(
+      code = c(6, 10, 11, 12, 20, 30, 40, 50, 60, 62, 70, 80, 90, 100,
+               110, 120, 122, 130, 150, 152, 153, 160, 190, 200, 201, 202, 210),
+      short_name = c(
+        "Unclassified", "Cropland_rf", "Herbaceous_rf",
+        "TreeShrub_rf", "Cropland_irr", "Mosaic_crop", "Mosaic_natveg",
+        "Tree_be_ever", "Tree_be_dec", "Tree_be_dec_open",
+        "Tree_ne_ever", "Tree_ne_dec", "Tree_mixed",
+        "Mosaic_tree_shrub", "Mosaic_herb", "Shrubland",
+        "Shrubland_dec", "Grassland", "Sparse_veg", "Sparse_shrub",
+        "Sparse_herb", "Tree_flood_fw", "Urban", "Bare", "Bare_cons",
+        "Bare_uncons", "Water"
+      ),
+      description = c(
+        "Unclassified / ancillary (code 6 unusual in legend)",
+        "Cropland, rainfed",
+        "Herbaceous cover, rainfed",
+        "Tree or shrub cover, rainfed",
+        "Cropland, irrigated or post-flooding",
+        "Mosaic cropland (>50%) / natural vegetation (<50%)",
+        "Mosaic natural vegetation (>50%) / cropland (<50%)",
+        "Tree cover, broadleaved, evergreen, closed to open (>15%)",
+        "Tree cover, broadleaved, deciduous, closed to open (>15%)",
+        "Tree cover, broadleaved, deciduous, open (15–40%)",
+        "Tree cover, needleleaved, evergreen, closed to open (>15%)",
+        "Tree cover, needleleaved, deciduous, closed to open (>15%)",
+        "Tree cover, mixed leaf type (broad + needle)",
+        "Mosaic tree and shrub (>50%) / herbaceous cover (<50%)",
+        "Mosaic herbaceous cover (>50%) / tree and shrub (<50%)",
+        "Shrubland",
+        "Shrubland, deciduous",  # Emphasizing sequence fitting 122
+        "Grassland",
+        "Sparse vegetation (tree/shrub/herbaceous <15%)",
+        "Sparse shrub (<15%)",
+        "Sparse herbaceous cover (<15%)",
+        "Tree cover, flooded, fresh/brackish water",
+        "Urban areas",    # 190
+        "Bare areas",     # 200
+        "Consolidated bare areas",  # 201
+        "Unconsolidated bare areas",# 202
+        "Water bodies"
+      )
+    )
+
+    levels(lulc) <- data.frame(value = lulc_classes$code,
+                               short_name = lulc_classes$short_name,
+                               description = lulc_classes$description)
+
+    ## 8.6.2) MapSPAM ####
+    files<-list.files(dirs$mapspam,".tif",full.names = T,recursive = T)
+    file<-grep("_prod_t*.all",files,value = T)
+
+    spam<-terra::rast(file)
+    # convert to density
+    spam<-spam/terra::cellSize(spam,unit="ha")
+    # resample to the atlas base raster
+    spam<-terra::resample(spam,pixel_map)
+    # convert back to numbers per pixel
+    spam<-spam*terra::cellSize(spam,unit="ha")
+
+    ## 8.6.3) GLW4 ####
+    files<-list.files(dirs$glw4,full.names = T)
+
+    glw<-terra::rast(files)
+    # convert to density
+    glw<-glw/terra::cellSize(glw,unit="ha")
+    # resample to the atlas base raster
+    glw<-terra::resample(glw,pixel_map)
+    # convert back to numbers per pixel
+    glw<-glw*terra::cellSize(glw,unit="ha")
+
+    names(glw)<-c("buffalo","chickens","cattle","goats","pigs","sheep")
+
+    # 8.6.4) Extract & merge
+    dat_stack<-c(lulc,spam,glw)
+    dat_ex<-terra::zonal(dat_stack,pixel_map)
+    setnames(dat_ex,"short_name","code")
+    dat_ex<-data.table(merge(dat_ex,lulc_classes,by="code",all.x=T,sort=F))
+
+    crops<-names(spam)
+    dat_ex[, (crops) := lapply(.SD, function(x) round(x, 1)), .SDcols = crops]
+
+    livestock<-names(glw)
+    dat_ex[, (livestock) := lapply(.SD, function(x) round(x, 0)), .SDcols = livestock]
+
+    write_parquet(dat_ex,file.path(dirs$nvdi_phenology,"pixel_index_lulc-commodities.parquet"))
+
+  ## 8.7) Upload to S3 ####
+    ### 8.7.1) Country phenology tables ####
 # Includes functions to upload data to S3 bucket
-source("https://raw.githubusercontent.com/AdaptationAtlas/hazards_prototype/refs/heads/main/R/haz_functions.R")
 
 s3_bucket<-"s3://digital-atlas/domain=phenology/type=sos_eos/source=glass_nvdi/region=africa/processing=raw/level=adm1/"
 folder_local<-file.path(dirs$nvdi_phenology,"countries")
@@ -620,6 +806,16 @@ upload_files_to_s3(files = files,
                    max_attempts = 3,
                    overwrite=F,
                    mode="public-read")
+    ### 8.8.2) Pixel Index Table ####
+s3_bucket<-"s3://digital-atlas/domain=phenology/type=sos_eos/source=glass_nvdi/region=africa/processing=raw/"
+files<-list.files(dirs$nvdi_phenology,"pixel_index",full.names = T)
 
+upload_files_to_s3(files = files,
+                   selected_bucket=s3_bucket,
+                   max_attempts = 3,
+                   overwrite=F,
+                   mode="public-read")
+
+s3_dir_ls(s3_bucket)
 
 # End of Script ####

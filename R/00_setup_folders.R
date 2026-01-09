@@ -8,7 +8,6 @@ root <- Sys.getenv("ANALOGUE_DATA_ROOT")
 Sys.setenv(PATH = paste("/opt/homebrew/bin", Sys.getenv("PATH"), sep = ":"))
 Sys.which("gdal_translate")
 
-
 if (!dir.exists(root)) {
   stop("⚠️  ANAlOGUE_DATA_ROOT does not exist.")
 }
@@ -20,6 +19,10 @@ dirs <- list(
   agera5_v2="climate_raw/agera5_v2",
   hobbins_ref_et="climate_raw/hobbins_ref_et",
   boundaries="static_raw/boundaries",
+  lulc="static_raw/lulc",
+  mapspam="static_raw/spam2020v1r2_ssa",
+aridity="static_raw/aridity",
+  glw4="static_raw/glw4_2020",
   srtm="static_raw/strm",
   soilgrids="static_raw/soilgrids",
   isda="static_raw/isda",
