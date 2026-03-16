@@ -1,0 +1,12 @@
+workspace:
+  allow_file_edit: true
+  allow_shell: true
+  allow_git: true
+
+commands:
+  test: "Rscript tests/run_tests.R"
+  lint: "lintr::lint_dir()"
+  build: "quarto render"
+
+safety:
+  confirm_destructive: true
