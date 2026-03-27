@@ -21,22 +21,17 @@ dirs <- list(
   boundaries="static_raw/boundaries",
   lulc="static_raw/lulc",
   mapspam="static_raw/spam2020v1r2_ssa",
-aridity="static_raw/aridity",
+  aridity="static_raw/aridity",
   glw4="static_raw/glw4_2020",
   srtm="static_raw/strm",
   soilgrids="static_raw/soilgrids",
   isda="static_raw/isda",
   glass_ndvi="climate_raw/glass_ndvi",
   glass_ndvi_tif="climate_raw/glass_ndvi_tif",
-  onset="climate_derived/onset",
   nvdi_phenology="climate_derived/glass_phenology",
-  seasonal="climate_derived/seasonal",
-  similarity="climate_derived/similarity",
   rf_forests="models/rf_forests",
   validation_reports="models/validation_reports",
-  points="points",
-  scratch="scratch"
-)
+  output="output")
 
 dir_names<-names(dirs)
 dirs<-lapply(dirs,FUN=function(d){
