@@ -205,9 +205,7 @@ meta <- tibble::tribble(
   "pixel",       "int",       "Raster cell index (row number in original `r_stack`)"
 )
 
-
 fwrite(meta,file.path(dirs$nvdi_phenology,"glass_pheno_raw_metadata.csv"))
-
 
 # 6) Clustering Green-Up into Seasons ####
 # This could use k-means or DBSCAN to group events into season 1, 2, etc.
@@ -471,7 +469,6 @@ africa0<-read_parquet(africa0)
 africa0_sf <- st_as_sf(africa0)
 africa0_vect <- vect(africa0_sf)
 
-
 # Admin 1 map
 africa1<-list.files(dirs$boundaries,"_a1_",full.names = T)
 africa1<-read_parquet(africa1)
@@ -483,10 +480,11 @@ africa1_vect <- vect(africa1_sf)
 countries<-sort(unique(africa0_vect$iso3))
 
 for(country in countries){
-  cat("Processing",country,"         /r")
+  cat("Processing",country,"         \r")
   save_file<-file.path(save_dir,paste0(country,"_seasonal-phenology.parquet"))
 
   country0<-africa0_vect[africa0_vect$iso3==country,]
+
   country1<-africa1_vect[africa1_vect$iso3==country,c("admin1_name")]
   country1 <- aggregate(country1, by = "admin1_name")
 
@@ -522,7 +520,7 @@ for(country in countries){
 
   # Save result
   write_parquet(country_dat,save_file)
-}
+  }
 
   ## 8.5) Merge rainfall data with country subsets ####
 
@@ -539,22 +537,35 @@ cdd_max <- function(date, rain, dry_thresh = 1) {
   r <- rle(dry)
   max(r$lengths[r$values])
 }
-
 chirps_dir<-file.path(dirname(dirs$chirps_v3),paste0(basename(dirs$chirps_v3),"_countries"))
+overwrite<-T
 
 for(i in 1:length(countries)){
   country<-countries[i]
-  cat("Processing",country,i,"/",length(countries),"         \r")
+  cat("Processing",country,i,"/",length(countries),"         \n")
   nvdi_file<-file.path(save_dir,paste0(country,"_seasonal-phenology.parquet"))
-  chirps_file<-file.path(chirps_dir,paste0(country,".parquet"))
+  chirps_file<-list.files(chirps_dir,country,full.names = T)
   save_file<-file.path(save_dir,paste0(country,"_seasonal-phenology_plus-rain.parquet"))
 
-  if(!file.exists(save_file)){
+  if(!file.exists(save_file)|overwrite){
    nvdi_dat<-read_parquet(nvdi_file)
-   chirps_dat<-read_parquet(chirps_file)
+
+   chirps_dat<-rbindlist(lapply(chirps_file, function(x){
+    read_parquet(x)
+   }))
 
    setDT(chirps_dat)
    setDT(nvdi_dat)
+
+   # Fix any garbage in date field
+   if(chirps_dat[,class(date)=="factor"]){
+     chirps_dat[,date:=as.character(date)]
+     chirps_dat[,date:=gsub("chirps-v3.0.","",date[1]),by=date]
+     chirps_dat[,date1:=as.Date(date[1],format = "%Y.%m.%d"),by=date]
+     chirps_dat[,date:=NULL]
+     setnames(chirps_dat,"date1","date")
+     write_parquet(chirps_dat,chirps_file)
+    }
 
    # Convert to compact date type
    date_cols <- names(which(sapply(nvdi_dat, function(x) class(x)[1] == "Date")))
@@ -563,15 +574,21 @@ for(i in 1:length(countries)){
 
    nvdi_dat[, TRS2_sos_p30 := TRS2.sos + 29L
             ][, TRS2_sos_p45 := TRS2.sos + 44L
+            ][, TRS2_pp28 := TRS2.sos - 28L
+            ][, TRS2_pp0 := TRS2.sos - 1L
               ][, DER_sos_p30 := DER.sos + 29L
                 ][, DER_sos_p45 := DER.sos + 44L
+                ][, DER_pp28 := DER.sos - 28L
+                ][, DER_pp0 := DER.sos - 1L
                   ][, Greenup_p30 := Greenup + 29L
-                    ][, Greenup_p45 := Greenup + 44L]
+                    ][, Greenup_p45 := Greenup + 44L
+                      ][, Greenup_pp28 := Greenup - 28L
+                        ][, Greenup_pp0 := Greenup - 1L]
 
    chirps_dat[, date2 := as.IDate(date[1], format = "%Y-%m-%d"),by=date]
    chirps_dat[, date3 := as.IDate(date2[1]),by=date2]
    chirps_dat[,c("date","date2"):=NULL]
-   setnames(chirps_dat,"date3","date")
+   setnames(chirps_dat,c("date3","rain"),c("date","value"),skip_absent = T)
 
    # Helpful index for speed on the big table
    setkey(chirps_dat, pixel, date)
@@ -601,6 +618,14 @@ for(i in 1:length(countries)){
 
    chirps_trs2_cdd45 <- chirps_dat[!is.na(flag),.(cdd_trs2_p45=cdd_max(date,value,dry_thresh = 1)),by = .(x, y, pixel, flag)]
 
+   chirps_dat[, flag := NULL
+   ][nvdi_dat,
+     on = .(pixel, date >= TRS2_pp28, date <= TRS2_pp0),
+     flag := i.flag
+   ]
+
+   chirps_trs2_pp28<-chirps_dat[!is.na(flag),.(rain_trs2_pp28=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
+
    chirps_dat[,flag:=NULL
    ][nvdi_dat,
      on = .(pixel, date >= DER.sos, date <= DER.eos),
@@ -624,6 +649,15 @@ for(i in 1:length(countries)){
    ]
 
    chirps_der_cdd45 <- chirps_dat[!is.na(flag),.(cdd_der_p45=cdd_max(date,value,dry_thresh = 1)),by = .(x, y, pixel, flag)]
+
+
+   chirps_dat[, flag := NULL
+   ][nvdi_dat,
+     on = .(pixel, date >= DER_pp28, date <= DER_pp0),
+     flag := i.flag
+   ]
+
+   chirps_der_pp28<-chirps_dat[!is.na(flag),.(rain_der_pp28=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
 
 
    chirps_dat[,flag:=NULL
@@ -650,6 +684,13 @@ for(i in 1:length(countries)){
 
    chirps_gs_cdd45 <- chirps_dat[!is.na(flag),.(cdd_gs_p45=cdd_max(date,value,dry_thresh = 1)),by = .(x, y, pixel, flag)]
 
+   chirps_dat[, flag := NULL
+   ][nvdi_dat,
+     on = .(pixel, date >= Greenup_pp28, date <= Greenup_pp0),
+     flag := i.flag
+   ]
+
+   chirps_gs_pp28<-chirps_dat[!is.na(flag),.(rain_gs_pp28=sum(value,na.rm=T)),by=.(x,y,pixel,flag)]
 
    # Merge back rainfall
    nvdi_dat[chirps_trs2,
@@ -664,6 +705,10 @@ for(i in 1:length(countries)){
             on = .(pixel, flag),
             cdd_trs2_p45 := i.cdd_trs2_p45]
 
+   nvdi_dat[chirps_trs2_pp28,
+            on = .(pixel, flag),
+            rain_trs2_pp28 := i.rain_trs2_pp28]
+
    nvdi_dat[chirps_gs,
             on = .(pixel, flag),
             rain_greenup_scenescence := i.rain_gs]
@@ -675,6 +720,10 @@ for(i in 1:length(countries)){
    nvdi_dat[chirps_gs_cdd45,
             on = .(pixel, flag),
             cdd_greenup_p45 := i.cdd_gs_p45]
+
+   nvdi_dat[chirps_gs_pp28,
+            on = .(pixel, flag),
+            rain_gs_pp28 := i.rain_gs_pp28]
 
    nvdi_dat[chirps_der,
             on = .(pixel, flag),
@@ -688,7 +737,13 @@ for(i in 1:length(countries)){
             on = .(pixel, flag),
             cdd_der_p45 := i.cdd_der_p45]
 
-   nvdi_dat[,c("TRS2_sos_p30","TRS2_sos_p45","DER_sos_p30","DER_sos_p45","Greenup_p30","Greenup_p45"):=NULL]
+   nvdi_dat[chirps_der_pp28,
+            on = .(pixel, flag),
+            rain_der_pp28 := i.rain_der_pp28]
+
+   nvdi_dat[,c("TRS2_sos_p30","TRS2_sos_p45","TRS2_pp0","TRS2_pp28",
+               "DER_sos_p30","DER_sos_p45","TDER_pp0","DER_pp28",
+               "Greenup_p30","Greenup_p45","Greenup_pp0","Greenup_pp28"):=NULL]
 
    write_parquet(nvdi_dat,save_file)
 
