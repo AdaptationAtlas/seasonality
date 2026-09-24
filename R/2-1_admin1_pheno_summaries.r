@@ -1,83 +1,52 @@
-# TO DO:
+# Main phenology processing script
+#
+# Purpose:
+#   - Load country-level phenology data
+#   - Harmonise seasonal labels
+#   - Apply QC and rainfall/NDVI gates
+#   - Summarise by admin1 and pixel
+#   - Produce raster outputs and plots
+#
+# Expects:
+#   - R/0-1_setup_folders.R
+#   - R/functions/circular_utils.R
+#   - R/functions/season_assignment.R
+#   - R/functions/plotting_utils.R
+#
+# Key inputs:
+#   - phenology parquet files in dirs$nvdi_phenology / "countries"
+#   - pixel index parquet
+#   - DEM and aridity rasters
+#
+# Key outputs:
+#   - plots in output_dir_plot
+#   - rasters in output_dir_rast
+#   - parameters_data_plots.RData in output_dir
 
-# DZA -> clearly there is an issue with merging close together season at the year end boundary,
-# we can see them being split between Dec/Jan but merged elsewhere in the year
-# this is an issue with section 1.1
-# ERI - Debubawi Keih Bahri not playing ball
 
+# https://www.nature.com/articles/sdata201620 - VALIDATION DATASET OF FARMER PLANTING DATES.
 
-pacman::p_load(circular,changepoint, data.table,  arrow, lubridate,  ggplot2,  terra)
+pacman::p_load(
+  circular,
+  changepoint,
+  data.table,
+  arrow,
+  lubridate,
+  ggplot2,
+  terra,
+  viridisLite,
+  gridExtra
+)
 
 source("R/0-1_setup_folders.R")
+source("R/functions/circular_utils.R")
+source("R/functions/season_assignment.R")
+source("R/functions/plotting_utils.R")
 
-# Create Functions ----
-{
+# Create Functions (legacy) ----
+if(F){
 
   source("R/functions/circular_seasons.r")
-
-  assign_season <- function(doy_vec, gap_factor = 2) {
-    x <- sort(doy_vec)
-    gaps <- diff(x)
-
-    if (length(gaps) ==  0) {
-      # only one observation → certainly one season
-      return(rep(1L, length(doy_vec)))
-    }
-
-    max_gap <- max(gaps)
-    med_gap <- median(gaps)
-
-    # decide if distribution is bimodal
-    is_bimodal <- max_gap > gap_factor * med_gap
-
-    if (!is_bimodal) {
-      # unimodal → assign season 1 only
-      return(rep(1L, length(doy_vec)))
-    }
-
-    # bimodal → find threshold
-    idx <- which.max(gaps)
-    split <- floor((x[idx] + x[idx + 1]) / 2)
-
-    as.integer(doy_vec > split) + 1L
-  }
-
-  # x = vector of Date or POSIXct
-  split_seasons_cpt <- function(x, max_seasons = 3L) {
-    doy_raw <- yday(x)
-
-    # trivial cases
-    n <- length(doy_raw)
-    if (n <=  2L || max_seasons ==  1L) {
-      return(rep(1L, n))
-    }
-
-    # order by DOY (seasons must be contiguous in DOY space)
-    o  <- order(doy_raw)
-    doy_sort <- doy_raw[o]
-
-    # at most max_seasons - 1 change points
-    res <- cpt.mean(
-      doy_sort,
-      method  = "BinSeg",      # binary segmentation, fast
-      Q       = max_seasons - 1,
-      penalty = "BIC"          # lets BIC choose how many cps are justified
-    )
-
-    cps <- cpts(res)           # indices of change points in the *sorted* vector
-
-    # assign segment IDs to sorted indices
-    seg_sorted <- findInterval(seq_len(n), vec = cps) + 1L
-    # map back to original order
-    seg <- integer(n)
-    seg[o] <- seg_sorted
-
-    seg
-  }
-
-  doy_to_circular <- function(doy) {
-    circular(2 * pi * (doy / 365), units = "radians", modulo = "2pi")
-  }
 
   quantile_circular_safe <- function(doy,probs = c(0.1, 0.5, 0.9),n_days = 365) {
     doy <- doy[!is.na(doy)]
@@ -115,19 +84,6 @@ source("R/0-1_setup_folders.R")
   }
 
   # circular helpers
-  circ_mean_doy <- function(x, period = 365) {
-    a <- 2 * pi * x / period
-    ang <- atan2(mean(sin(a), na.rm = TRUE), mean(cos(a), na.rm = TRUE))
-    if (ang < 0) ang <- ang + 2 * pi
-    ang * period / (2 * pi)
-  }
-
-  assign_to_focus <- function(doy, sos_50_1, sos_50_2, n_days = 365) {
-    d1 <- circ_dist(doy, sos_50_1, n_days)
-    d2 <- circ_dist(doy, sos_50_2, n_days)
-    fifelse(d1 <= d2, 1L, 2L)
-  }
-
   forward_circ_dist <- function(start, end, n_days = 365) {
     start <- rep_len(start, max(length(start), length(end)))
     end   <- rep_len(end,   max(length(start), length(end)))
@@ -153,29 +109,8 @@ source("R/0-1_setup_folders.R")
     out
   }
 
-  interval_within_circular_window <- function(doy, doy_eos, sos, eos, n_days = 365) {
-    n <- max(length(doy), length(doy_eos), length(sos), length(eos))
+  # Plot palettes and helpers ----
 
-    doy     <- rep_len(doy, n)
-    doy_eos <- rep_len(doy_eos, n)
-    sos     <- rep_len(sos, n)
-    eos     <- rep_len(eos, n)
-
-    out <- rep(NA, n)
-
-    ok <- !is.na(doy) & !is.na(doy_eos) & !is.na(sos) & !is.na(eos)
-    if (!any(ok)) return(out)
-
-    start_ok <- in_circular_window(doy[ok], sos[ok], eos[ok], n_days = n_days)
-    cand_len <- forward_circ_dist(doy[ok], doy_eos[ok], n_days = n_days)
-    max_len  <- forward_circ_dist(doy[ok], eos[ok], n_days = n_days)
-
-    out[ok] <- start_ok & (cand_len <= max_len)
-    out
-  }
-}
-# Plot palettes and helpers ----
-{
   # Keep these helpers self-contained so they still work when run out of order in the terminal.
   get_circ_pal <- function(palette = c("hcl_soft", "hcl_month", "phenology"), n = 365) {
     palette <- match.arg(palette)
@@ -427,35 +362,13 @@ source("R/0-1_setup_folders.R")
     x
   }
 
-  plot_season_vars <- function(
-    raster_list,
-    vars = c("sos"),
-    include_n = TRUE,
-    season_name = NULL,
-    circ_palette = "phenology",
-    seq_palette = "ylgnbu"
-  ) {
 
-    x <- build_season_stack(
-      raster_list = raster_list,
-      vars = vars,
-      include_n = include_n
-    )
 
-    plot_season_stack(
-      x,
-      season_name = season_name,
-      circ_palette = circ_palette,
-      seq_palette = seq_palette
-    )
-
-    invisible(x)
-  }
 
 }
 # Choose And Load Data ----
-# Load Pixel Index ----
 {
+  # Load Pixel Index ----
   coords_index <- read_parquet(
     file.path(dirs$nvdi_phenology, "pixel_index.parquet")
   )
@@ -522,68 +435,8 @@ source("R/0-1_setup_folders.R")
     write_parquet(px_env, dem_ai_file)
   }
 }
-# Set custom overrides to fix season sequencing ----
-{
-  season_overrides <- data.table::data.table(
-    iso3 = c("AGO"),
-    admin1_name = c(NA_character_),   # NA = apply to all admin1 in country (or specify names)
-    rule = c("sos_window_swap"),
-    season_target = c(1L),
-    window_start = c(5*30),  # Jul
-    window_end   = c(9*30)   # Sept
-  )
 
-  apply_season_overrides <- function(dat, overrides, iso3_selected) {
-
-    if (is.null(overrides) || nrow(overrides) == 0) return(dat)
-
-    ov <- overrides[iso3 == iso3_selected]
-    if (nrow(ov) == 0) return(dat)
-
-    for (i in seq_len(nrow(ov))) {
-
-      rule <- ov$rule[i]
-      target <- ov$season_target[i]
-      start <- ov$window_start[i]
-      end   <- ov$window_end[i]
-      admin_filter <- ov$admin1_name[i]
-
-      # restrict to admin if provided
-      dat_sub <- if (is.na(admin_filter)) {
-        dat
-      } else {
-        dat[admin1_name == admin_filter]
-      }
-
-      if (rule == "sos_window_swap") {
-
-        map <- dat_sub[
-          !is.na(season_harmonized),
-          .(sos_med = quantile_circular_safe(doy, probs = 0.5)),
-          by = .(admin1_name, season_harmonized)
-        ]
-
-        map[
-          season_harmonized == target &
-          in_circular_window(sos_med, start, end),
-          flip := TRUE
-        ]
-
-        flip_admins <- unique(map[flip == TRUE, admin1_name])
-
-        if (length(flip_admins) > 0) {
-          dat[
-            admin1_name %in% flip_admins,
-            season_harmonized := 3L - season_harmonized
-          ]
-        }
-    }
-   }
-
-  dat
-  }
-}
-# Load Phenology Data ----
+# List phenology files and countries ----
   # Folder for country phenology data
   pheno_dat <- file.path(dirs$nvdi_phenology, "countries")
   # Choose ISO3 country code
@@ -595,210 +448,220 @@ source("R/0-1_setup_folders.R")
   # use DER
   use_DER<-F
 
-  #  Parameters
-  {
-    # QC parameter definitions ---------------------------------------------------
-    #
-    # Quantile-based thresholds are computed within zone_id × season_harmonized.
-    # They are relative thresholds, not absolute physical values.
-    #
-    # Variable definitions:
-    #   p30         = rainfall accumulated in the first 30 days of the season
-    #                 Unit: mm
-    #   rtot        = total rainfall over the season
-    #                 Unit: mm
-    #   cdd         = consecutive dry days over the focal seasonal window
-    #                 Unit: days
-    #   NSE         = Nash-Sutcliffe Efficiency of NDVI seasonal fit
-    #                 Unit: unitless, typically (-Inf, 1]
-    #   R2          = coefficient of determination of NDVI seasonal fit
-    #                 Unit: unitless, [0, 1]
-    #
-    # Quantile gates (zone-specific thresholds):
-    #   p30_q_fail / p30_q_weak
-    #       Meaning: lower-tail quantiles of early-season rainfall (p30).
-    #       Interpretation:
-    #         p30 <= zone-specific p30_q_fail threshold  -> strong failure signal
-    #         p30 <= zone-specific p30_q_weak threshold  -> weak stress signal
-    #       Unit of underlying variable: mm
-    #       Parameter unit: probability / quantile in [0, 1]
-    #       Higher values = stricter (more seasons flagged)
-    #
-    #   rtot_q_fail / rtot_q_weak
-    #       Meaning: lower-tail quantiles of total seasonal rainfall (rtot).
-    #       Interpretation:
-    #         rtot <= zone-specific rtot_q_fail threshold -> strong failure signal
-    #         rtot <= zone-specific rtot_q_weak threshold -> weak stress signal
-    #       Unit of underlying variable: mm
-    #       Parameter unit: probability / quantile in [0, 1]
-    #       Higher values = stricter
-    #
-    #   cdd_q_fail / cdd_q_weak
-    #       Meaning: upper-tail quantiles of consecutive dry days (CDD).
-    #       Interpretation:
-    #         cdd >= zone-specific cdd_q_fail threshold -> strong failure signal
-    #         cdd >= zone-specific cdd_q_weak threshold -> weak stress signal
-    #       Unit of underlying variable: days
-    #       Parameter unit: probability / quantile in [0, 1]
-    #       Lower values = stricter, because they pull the threshold downward
-    #
-    # Absolute hard limits (applied only in hyper-arid / arid / semi-arid bins):
-    #   p30_hard_fail_arid / p30_hard_weak_arid
-    #       Meaning: absolute minimum early rainfall in first 30 days
-    #       Unit: mm
-    #       Interpretation:
-    #         p30 < threshold -> fail / weak
-    #       Higher values = stricter
-    #
-    #   rtot_hard_fail_arid / rtot_hard_weak_arid
-    #       Meaning: absolute minimum total seasonal rainfall
-    #       Unit: mm
-    #       Interpretation:
-    #         rtot < threshold -> fail / weak
-    #       Higher values = stricter
-    #
-    #   cdd_hard_fail_arid / cdd_hard_weak_arid
-    #       Meaning: absolute maximum dry-spell length
-    #       Unit: days
-    #       Interpretation:
-    #         cdd > threshold -> fail / weak
-    #       Lower values = stricter
-    #
-    # NDVI fit quality thresholds:
-    #   ndvi_nse_min
-    #       Meaning: minimum acceptable Nash-Sutcliffe Efficiency for NDVI fit
-    #       Unit: unitless
-    #       Higher values = stricter
-    #
-    #   ndvi_r2_min
-    #       Meaning: minimum acceptable R² for NDVI fit
-    #       Unit: unitless
-    #       Higher values = stricter
-    #
-    # Sample-size threshold:
-    #   min_n
-    #       Meaning: minimum number of observations required within a
-    #       zone_id × season_harmonized group to compute stable quantile thresholds
-    #       Unit: count of observations
-    #       Higher values = more conservative / more stable, but less coverage
+#  QC Parameters ----
+{
+  # Quantile-based thresholds are computed within zone_id × season_harmonized.
+  # They are relative thresholds, not absolute physical values.
+  #
+  # Variable definitions:
+  #   p30         = rainfall accumulated in the first 30 days of the season
+  #                 Unit: mm
+  #   rtot        = total rainfall over the season
+  #                 Unit: mm
+  #   cdd         = consecutive dry days over the focal seasonal window
+  #                 Unit: days
+  #   NSE         = Nash-Sutcliffe Efficiency of NDVI seasonal fit
+  #                 Unit: unitless, typically (-Inf, 1]
+  #   R2          = coefficient of determination of NDVI seasonal fit
+  #                 Unit: unitless, [0, 1]
+  #
+  # Quantile gates (zone-specific thresholds):
+  #   p30_q_fail / p30_q_weak
+  #       Meaning: lower-tail quantiles of early-season rainfall (p30).
+  #       Interpretation:
+  #         p30 <= zone-specific p30_q_fail threshold  -> strong failure signal
+  #         p30 <= zone-specific p30_q_weak threshold  -> weak stress signal
+  #       Unit of underlying variable: mm
+  #       Parameter unit: probability / quantile in [0, 1]
+  #       Higher values = stricter (more seasons flagged)
+  #
+  #   rtot_q_fail / rtot_q_weak
+  #       Meaning: lower-tail quantiles of total seasonal rainfall (rtot).
+  #       Interpretation:
+  #         rtot <= zone-specific rtot_q_fail threshold -> strong failure signal
+  #         rtot <= zone-specific rtot_q_weak threshold -> weak stress signal
+  #       Unit of underlying variable: mm
+  #       Parameter unit: probability / quantile in [0, 1]
+  #       Higher values = stricter
+  #
+  #   cdd_q_fail / cdd_q_weak
+  #       Meaning: upper-tail quantiles of consecutive dry days (CDD).
+  #       Interpretation:
+  #         cdd >= zone-specific cdd_q_fail threshold -> strong failure signal
+  #         cdd >= zone-specific cdd_q_weak threshold -> weak stress signal
+  #       Unit of underlying variable: days
+  #       Parameter unit: probability / quantile in [0, 1]
+  #       Lower values = stricter, because they pull the threshold downward
+  #
+  # Absolute hard limits (applied only in hyper-arid / arid / semi-arid bins):
+  #   p30_hard_fail_arid / p30_hard_weak_arid
+  #       Meaning: absolute minimum early rainfall in first 30 days
+  #       Unit: mm
+  #       Interpretation:
+  #         p30 < threshold -> fail / weak
+  #       Higher values = stricter
+  #
+  #   rtot_hard_fail_arid / rtot_hard_weak_arid
+  #       Meaning: absolute minimum total seasonal rainfall
+  #       Unit: mm
+  #       Interpretation:
+  #         rtot < threshold -> fail / weak
+  #       Higher values = stricter
+  #
+  #   cdd_hard_fail_arid / cdd_hard_weak_arid
+  #       Meaning: absolute maximum dry-spell length
+  #       Unit: days
+  #       Interpretation:
+  #         cdd > threshold -> fail / weak
+  #       Lower values = stricter
+  #
+  # NDVI fit quality thresholds:
+  #   ndvi_nse_min
+  #       Meaning: minimum acceptable Nash-Sutcliffe Efficiency for NDVI fit
+  #       Unit: unitless
+  #       Higher values = stricter
+  #
+  #   ndvi_r2_min
+  #       Meaning: minimum acceptable R² for NDVI fit
+  #       Unit: unitless
+  #       Higher values = stricter
+  #
+  # Sample-size threshold:
+  #   min_n
+  #       Meaning: minimum number of observations required within a
+  #       zone_id × season_harmonized group to compute stable quantile thresholds
+  #       Unit: count of observations
+  #       Higher values = more conservative / more stable, but less coverage
 
-    p30_q_fail  <- 0.10
-    p30_q_weak  <- 0.20
-    cdd_q_fail  <- 0.90
-    cdd_q_weak  <- 0.80
-    rtot_q_fail <- 0.10
-    rtot_q_weak <- 0.20
+  p30_q_fail  <- 0.10
+  p30_q_weak  <- 0.20
+  cdd_q_fail  <- 0.90
+  cdd_q_weak  <- 0.80
+  rtot_q_fail <- 0.10
+  rtot_q_weak <- 0.20
 
-    p30_hard_fail_arid <- 5
-    p30_hard_weak_arid <- 15
+  p30_hard_fail_arid <- 5
+  p30_hard_weak_arid <- 15
 
-    cdd_hard_fail_arid <- 35
-    cdd_hard_weak_arid <- 25
+  cdd_hard_fail_arid <- 35
+  cdd_hard_weak_arid <- 25
 
-    rtot_hard_fail_arid <- 50
-    rtot_hard_weak_arid <- 120
+  rtot_hard_fail_arid <- 50
+  rtot_hard_weak_arid <- 120
 
 
-    ndvi_nse_min <- 0.60
-    ndvi_r2_min  <- 0.60
+  ndvi_nse_min <- 0.60
+  ndvi_r2_min  <- 0.60
 
-    min_n <- 30
+  min_n <- 30
 
-    params<-list()
-  params$params<-list(
-    use_DER = use_DER,
-    p30_q_fail  = p30_q_fail,
-    p30_q_weak  = p30_q_weak,
-    cdd_q_fail  = cdd_q_fail,
-    cdd_q_weak  = cdd_q_weak,
-    rtot_q_fail = rtot_q_fail,
-    rtot_q_weak = rtot_q_weak,
-    p30_hard_fail_arid = p30_hard_fail_arid,
-    p30_hard_weak_arid = p30_hard_weak_arid,
-    cdd_hard_fail_arid = cdd_hard_fail_arid,
-    cdd_hard_weak_arid = cdd_hard_weak_arid,
-    rtot_hard_fail_arid = rtot_hard_fail_arid,
-    rtot_hard_weak_arid = rtot_hard_weak_arid,
-    ndvi_nse_min = ndvi_nse_min,
-    ndvi_r2_min  = ndvi_r2_min,
-    min_n = min_n
-  )
+  params<-list()
+params$params<-list(
+  use_DER = use_DER,
+  p30_q_fail  = p30_q_fail,
+  p30_q_weak  = p30_q_weak,
+  cdd_q_fail  = cdd_q_fail,
+  cdd_q_weak  = cdd_q_weak,
+  rtot_q_fail = rtot_q_fail,
+  rtot_q_weak = rtot_q_weak,
+  p30_hard_fail_arid = p30_hard_fail_arid,
+  p30_hard_weak_arid = p30_hard_weak_arid,
+  cdd_hard_fail_arid = cdd_hard_fail_arid,
+  cdd_hard_weak_arid = cdd_hard_weak_arid,
+  rtot_hard_fail_arid = rtot_hard_fail_arid,
+  rtot_hard_weak_arid = rtot_hard_weak_arid,
+  ndvi_nse_min = ndvi_nse_min,
+  ndvi_r2_min  = ndvi_r2_min,
+  min_n = min_n
+)
+}
+# Min rainfall threshold ----
+# Remove greenup events below a minimum rainfall threshold (28 days before planting to senescence)
+rain_min<-10
 
 # Set run version & output dirs----
+{
 version<-Sys.Date()
 
 output_dir <- file.path(dirs$output,version)
 output_dir_rast <- file.path(dirs$output,version,"rast")
+output_dir_plot <- file.path(dirs$output,version,"plot")
 
 if (!dir.exists(output_dir_rast)) dir.create(output_dir_rast, recursive = TRUE, showWarnings = FALSE)
 }
+# Fine tune season assignments ----
+
+  admin_3_season<-list(AGO=c("Uíge","Lunda Norte","Lunda Sul"),
+                       COD = c("Lomami","Kasaï-Central","Kinshasa","Kwilu","Kasaï-Central",
+                               "Maniema","Sud-Kivu"),
+                       CAF = "Equateur",
+                       DJI=c("Obock","Djiboutii","Ali Sabieh","Arta","Tadjoura","Dikhil"),
+                       COG=c("Pool"),
+                       EGY= c("Bīr Ṭawīl"),
+                       ERI =c("Debubawi Keih Bahri"),
+                       RWA = c("Iburasirazuba","Amajyaruguru","Amajyepfo","Iburengerazuba","Umujyi Wa Kigali"),
+                       SOM = c("Awdal"),
+                       TZA = c("Tanga","Mara"))
+
+  skip_season_harmonization_admin1<-list(AGO= c("Namibe","Bengo","Huíla","Cabinda","Beguela","Namibe","Cunene"),
+                                         BDI = c("Bujumbura","Rumonge","Bubanza"),
+                                         BEN = c("Borgou", "Donga","Alibori","Atacora"),
+                                         COG= c("Kouilou","Lekoumou","Niari"),
+                                         CIV = c("Woroba","Savanes","Denguélé"),
+                                         CMR = c("Extrême-Nord","Nord","Adamaoua"),
+                                         DZA = c("Adrar","Alger","Biskra","Batna","M'Sila","Djelfa","El Bayadh",
+                                                 "Illizi","Khenchela","Laghouat","Naama","Tamanrasset",
+                                                 "Tebessa","Tiaret","Ghardaia","Bechar","El Oued","Guelma","Medea",
+                                                 "Mila","Setif","Souk-Ahras","Oum El Bouaghi","Sidi Bel Abbes",
+                                                 "Tindouf","Tissemsilt","Tlemcen","Ouargla","Constantine","Bordj Bou Arrer"),
+                                         EGY = c("Aswan","North Sinai","Matrouh","Red Sea","Bejaia","Al-, Ismailia","Assiut",
+                                                 "Behera","Beni Suef","Giza","Luxor","Menia","New Valley","Qena","Suez",
+                                                 "Suhag"),
+                                         ERI = c("Anseba","Debub","Gash Barka","Maekel"),
+                                         ETH = c("Addis Ababa","Dire Dawa","Amhara","Gambela","Tigray"),
+                                         GAB = c("Estuaire","Moyen-Ogooue","Ngounie","Nyanga","Ogooue-Maritime"),
+                                         GHA = c("Northern"),
+                                         GIN = c("Faranah","Kankan","Labe","Mamou","Kindia"),
+                                         GMB = c("North Bank","West Coast"),
+                                         KEN = c("Kakamega","Bungoma","Baringo","Busia","Elgeyo-Marakwet","Kericho","Nakuru","Nandi","Narok","Nyandarua","Uasin Gishu","West Pokot","Siaya","Kisumu"),
+                                         LBR = c("Grand Gedeh","Grand Kru","Rivercess","Sinoe","River Gee","Maryland"),
+                                         MLI = c("Kayes","Mopti","Ségou"),
+                                         MRT = c("Assaba","Gorgol","Hodh El Gharbi","Nouakchott-Sud"),
+                                         NER = c("Dosso","Maradi","Tillabéri"),
+                                         NGA = c("Adamawa","Benue","Borno","Ebonyi","Ekiti","Enugu",
+                                                 "Federal Capital Territory","Gombe","Jigawa","Kaduna",
+                                                 "Kebbi","Kwara","Nassarawa","Niger","Oyo","Plateau",
+                                                 "Sokoto","Taraba","Yobe"),
+                                         SDN = c('Aj Jazirah',"Gedaref","Hala'Ib Triangle","Kassala",
+                                                 "Northern","Sennar","West Kordofan","White Nile"),
+                                         SOM = c("Banadir"),
+                                         SSD = c("Eastern Equatoria","Jonglei","Lakes","Northern Bahr El Ghazal",
+                                                 "Unity","Upper Nile","Warrap"),
+                                         STP = c("São Tomé"),
+                                         TCD = c("Barh-El-Gazel","Batha","Chari-Baguirmi","Hadjer Lamis",
+                                                 "Hadjer-Lamis","Lac","Mayo-Kebbi Est","Salamat","Sila",
+                                                 "Tandjilé","Wadi Fira"),
+                                         TGO = c("Kara","Maritime","Centrale","Plateaux"),
+                                         TUN = c("Bizerte","Gabes","Kebili","Le Kef","Manouba",
+                                                 "Nabeul","Mednine","Tataouine","Tunis","Zaghouan"),
+                                         TZA = c("Arusha","Dodoma","Katavi","Lindi","Manyara","Mbeya","Morogoro",
+                                                 "Mtwara","Njombe","Pwani","Rukwa","Ruvuma","Shinyanga","Simiyu",
+                                                 "Singida","Songwe"),
+                                         UGA = c("Central","Eastern","Northern","Western")
+  )
+
+  force1<-c("BFA","BWA","CAF","COM","CPV","ESH","GNB","LBY","LSO","MAR","MDG","MOZ","MWI","NAM","SEN","SWZ","SYC","ZAF","ZMB","ZWE")
+
+  force1_admin1<-list(AGO = c("Namibe","Luanda","Cuanza Sul"),
+                      BDI = c("Mairie De Bujumbura","Cibitoke","Bururi"),
+                      COD=c("Kongo Central","Haut-Katanga","Tanganyika","Bas-Uélé"))
+
+  rm_season<-list(AGO=c(1))
+
+  # Skip reassigment of seasons in section 3" "National consolidation from scratch on pixel-season summaries"
+  skip_nat_cons<-list(KEN = T)
 
 # Loop through countries ----
-
-admin_3_season<-list(AGO=c("Uíge","Lunda Norte","Lunda Sul"),
-                     COD = c("Lomami","Kasaï-Central","Kinshasa","Kwilu","Kasaï-Central",
-                             "Maniema","Sud-Kivu"),
-                     CAF = "Equateur",
-                     DJI=c("Obock","Djiboutii","Ali Sabieh","Arta","Tadjoura","Dikhil"),
-                     COG=c("Pool"),
-                     EGY= c("Bīr Ṭawīl"),
-                     ERI =c("Debubawi Keih Bahri"),
-                     RWA = c("Iburasirazuba","Amajyaruguru","Amajyepfo","Iburengerazuba","Umujyi Wa Kigali"),
-                     SOM = c("Awdal"),
-                     TZA = c("Tanga","Mara"))
-
-skip_season_harmonization_admin1<-list(AGO= c("Luanda","Namibe"),
-                                       BDI = c("Bujumbura","Rumonge","Bubanza"),
-                                       BEN = c("Borgou", "Donga","Alibori","Atacora"),
-                                       COG= c("Kouilou","Lekoumou","Niari"),
-                                       CIV = c("Woroba","Savanes","Denguélé"),
-                                       CMR = c("Extrême-Nord","Nord","Adamaoua"),
-                                       DZA = c("Adrar","Alger","Biskra","Batna","M'Sila","Djelfa","El Bayadh",
-                                               "Illizi","Khenchela","Laghouat","Naama","Tamanrasset",
-                                               "Tebessa","Tiaret","Ghardaia","Bechar","El Oued","Guelma","Medea",
-                                               "Mila","Setif","Souk-Ahras","Oum El Bouaghi","Sidi Bel Abbes",
-                                               "Tindouf","Tissemsilt","Tlemcen","Ouargla","Constantine","Bordj Bou Arrer"),
-                                       EGY = c("Aswan","North Sinai","Matrouh","Red Sea","Bejaia","Al-, Ismailia","Assiut",
-                                               "Behera","Beni Suef","Giza","Luxor","Menia","New Valley","Qena","Suez",
-                                               "Suhag"),
-                                       ERI = c("Anseba","Debub","Gash Barka","Maekel"),
-                                       ETH = c("Addis Ababa","Dire Dawa","Amhara","Gambela","Tigray"),
-                                       GAB = c("Estuaire","Moyen-Ogooue","Ngounie","Nyanga","Ogooue-Maritime"),
-                                       GHA = c("Northern"),
-                                       GIN = c("Faranah","Kankan","Labe","Mamou","Kindia"),
-                                       GMB = c("North Bank","West Coast"),
-                                       KEN = c("Kakamega","Bungoma","Baringo","Busia","Elgeyo-Marakwet","Kericho","Nakuru","Nandi","Narok","Nyandarua","Uasin Gishu","West Pokot","Siaya","Kisumu"),
-                                       LBR = c("Grand Gedeh","Grand Kru","Rivercess","Sinoe","River Gee","Maryland"),
-                                       MLI = c("Kayes","Mopti","Ségou"),
-                                       MRT = c("Assaba","Gorgol","Hodh El Gharbi","Nouakchott-Sud"),
-                                       NER = c("Dosso","Maradi","Tillabéri"),
-                                       NGA = c("Adamawa","Benue","Borno","Ebonyi","Ekiti","Enugu",
-                                               "Federal Capital Territory","Gombe","Jigawa","Kaduna",
-                                               "Kebbi","Kwara","Nassarawa","Niger","Oyo","Plateau",
-                                               "Sokoto","Taraba","Yobe"),
-                                       SDN = c('Aj Jazirah',"Gedaref","Hala'Ib Triangle","Kassala",
-                                               "Northern","Sennar","West Kordofan","White Nile"),
-                                       SOM = c("Banadir"),
-                                       SSD = c("Eastern Equatoria","Jonglei","Lakes","Northern Bahr El Ghazal",
-                                               "Unity","Upper Nile","Warrap"),
-                                       STP = c("São Tomé"),
-                                       TCD = c("Barh-El-Gazel","Batha","Chari-Baguirmi","Hadjer Lamis",
-                                               "Hadjer-Lamis","Lac","Mayo-Kebbi Est","Salamat","Sila",
-                                               "Tandjilé","Wadi Fira"),
-                                       TGO = c("Kara","Maritime","Centrale","Plateaux"),
-                                       TUN = c("Bizerte","Gabes","Kebili","Le Kef","Manouba",
-                                               "Nabeul","Mednine","Tataouine","Tunis","Zaghouan"),
-                                       TZA = c("Arusha","Dodoma","Katavi","Lindi","Manyara","Mbeya","Morogoro",
-                                               "Mtwara","Njombe","Pwani","Rukwa","Ruvuma","Shinyanga","Simiyu",
-                                               "Singida","Songwe"),
-                                       UGA = c("Central","Eastern","Northern","Western")
-                                       )
-
-force1<-c("BFA","BWA","CAF","COM","CPV","ESH","GNB","LBY","LSO","MAR","MDG","MOZ","MWI","NAM","SEN","SWZ","SYC","ZAF","ZMB","ZWE")
-
-force1_admin1<-list(BDI = c("Mairie De Bujumbura","Cibitoke","Bururi"),
-                    COD=c("Kongo Central","Haut-Katanga","Tanganyika","Bas-Uélé"))
-
 # Check integrity of chirps data before starting
 if(F){
   chirps_check<-rbindlist(lapply(1:length(iso3_choices),function(k){
@@ -813,21 +676,17 @@ if(F){
 }))
 }
 
-
-# Skip reassigment of seasons in section 3" "National consolidation from scratch on pixel-season summaries"
-skip_nat_cons<-list(KEN = T)
-
 for(k in 1:length(iso3_choices)){
 
   iso3_selected<-iso3_choices[k]
   cat("Processing",k,iso3_selected, "...\n")
 
-  # Load data ----
+  # Step 0.0: Load data ----
   {
   file_choice <- grep(iso3_selected, files, value = TRUE)
   dat_raw <- setDT(read_parquet(file_choice))
   }
-  # Merge DEM, Aridity, And Coordinates ----
+  # Step 0.1: Merge DEM, Aridity, And Coordinates ----
   {
     dat_raw <- px_env[dat_raw, on = .(pixel)]
 
@@ -838,8 +697,15 @@ for(k in 1:length(iso3_choices)){
   template_xyz<-unique(merge(dat_raw[,"pixel"],coords_index,all.x=T))[,pixel:=NULL]
   template_r <- terra::rast(template_xyz, type = "xyz", crs = "EPSG:4326")
   terra::values(template_r) <- NA_real_
-}
-  # Prepare Phenology Data ----
+  }
+
+  # Humidity flags for alternative pathway ----
+  humid_flags<-dat_raw[,.(n=.N,
+                          n_greenup=sum(!is.na(Greenup))
+                          ),
+                       by=.(pixel,season,aridity_bin,aridity)]
+
+  # Step 1.0: Prepare Phenology Data ----
   {
     # Split year and season from flag
     parts <- tstrsplit(dat_raw$flag, "_")
@@ -858,7 +724,7 @@ for(k in 1:length(iso3_choices)){
     dat_raw[, TRS2.sos  := as.IDate(TRS2.sos)]
     dat_raw[, TRS2.eos  := as.IDate(TRS2.eos)]
   }
-  # Step 1: Choose Best Available Season Source Per Row ----
+  # Step 1.1: Choose Best Available Season Source Per Row ----
   {
       # Priority: Greenup > DER > TRS2 (requires both sos/eos to be present)
       if(use_DER){
@@ -1052,8 +918,9 @@ for(k in 1:length(iso3_choices)){
 
   # Step 1.3: Harmonize season labels within each admin1 using original split_seasons_cpt ----
 
-  dat<-dat[rain_total>10]
-  dat<-copy(dat_raw)
+  if(!is.null(rain_min)){
+    dat<-dat_raw[rain_total>10]
+  }
   dat[!is.na(season_clean), n_seasons_clean := uniqueN(season_clean), by = admin1_name]
 
   if(iso3_selected %in% force1){
@@ -1067,9 +934,6 @@ for(k in 1:length(iso3_choices)){
         dat1[,season_harmonized:=season_clean]
         dat<-dat[!admin1_name %in% rm_admin]
       }
-
-      #dat[n_seasons_clean>1 & !is.na(sos) & !admin1_name %in% admin_3_season[[iso3_selected]], season_harmonized :=  split_seasons_cpt(x = sos, max_seasons = 2L), by = admin1_name]
-      #dat[n_seasons_clean>1 & !is.na(sos) & admin1_name %in% admin_3_season[[iso3_selected]], season_harmonized :=  split_seasons_cpt(x = sos, max_seasons = 3L), by = admin1_name]
 
       dat[n_seasons_clean>1 & !is.na(sos) & !admin1_name %in% admin_3_season[[iso3_selected]],
           season_harmonized :=assign_admin_seasons(sos, eos, max_seasons = 2L)$season, by = admin1_name]
@@ -1174,6 +1038,9 @@ for(k in 1:length(iso3_choices)){
       ) +
       theme_bw())
 
+    print(g_polar)
+
+    params$plots$polar_seasons_initial<-g_polar
 
   }
   # Step 2: Gates And QC Flags (Zone-Based, Aridity-Aware)
@@ -1725,7 +1592,7 @@ for(k in 1:length(iso3_choices)){
   }
   # Show differences between seasons in terms of rain and season length ----
   {
-    if(dat[!is.na(season_harmonized),uniqueN(season_harmonized)==2]){
+    if(dat[!is.na(season_harmonized),uniqueN(season_harmonized)>1]){
       season_diff_base <- dat |>
       subset(
           !is.na(season_harmonized) &
@@ -1741,9 +1608,9 @@ for(k in 1:length(iso3_choices)){
       ) |>
       setDT()
     }
-  }
+
   # Admin1-year means: one mean value per season per admin1-year
-  {
+
     season_diff_admin <- season_diff_base[
       , .(
         rain = mean(rain_greenup_scenescence, na.rm = TRUE),
@@ -1967,9 +1834,8 @@ for(k in 1:length(iso3_choices)){
       ]
     )
 
-    # ------------------------------------------------------------------
-    # Mismatch detection for 1 to 3 seasons
-    # ------------------------------------------------------------------
+
+    # Mismatch detection for 1 to 3 seasons ----
 
     # Attach each row to its OWN admin1-season reference window
     own_ref <- copy(focal_admin_join)
@@ -2085,9 +1951,7 @@ for(k in 1:length(iso3_choices)){
       !(sos_mismatch | eos_mismatch)
     ]
 
-    # ------------------------------------------------------------------
-    # Histograms of greenup-based SOS by admin1 and season
-    # ------------------------------------------------------------------
+    # Histograms of greenup-based SOS by admin1 and season ----
     {
       bin_width <- 10
       breaks <- seq(0.5, 360.5, by = bin_width)
@@ -2163,11 +2027,59 @@ for(k in 1:length(iso3_choices)){
           theme_bw())
 
       plot(g_polar)
+
+      params$plots$polar_seasons_final<-g_polar
+
+      # Save results ----
+      # Adaptive facet layout
+
+      n_facets <- data.table::uniqueN(polar_counts$admin1_name)
+
+      ncol <- if (n_facets <= 4) {
+        n_facets
+      } else if (n_facets <= 12) {
+        4
+      } else {
+        5
+      }
+
+      nrow <- ceiling(n_facets / ncol)
+
+      g_polar <- g_polar +
+        facet_wrap(~admin1_name, scales = "free", ncol = ncol)
+
+      # Dynamic sizing (square panels)
+      panel_width  <- 3.5
+      panel_height <- 3.5
+
+      plot_width  <- ncol * panel_width
+      plot_height <- nrow * panel_height
+
+      # optional cap to avoid huge files
+      plot_width  <- min(plot_width, 20)
+      plot_height <- min(plot_height, 20)
+
+      # Save plot
+      if (!dir.exists(output_dir_plot)) {
+        dir.create(output_dir_plot, recursive = TRUE)
+      }
+
+      outfile <- file.path(
+        output_dir_plot,
+        paste0(iso3_selected, "_polar_seasonal_detections.png")
+      )
+
+      ggsave(
+        filename = outfile,
+        plot = g_polar,
+        width = plot_width,
+        height = plot_height,
+        dpi = 300,
+        bg = "white"
+      )
     }
 
-    # ------------------------------------------------------------------
-    # Average focal_dat over years including quantiles, by admin1/pixel/season
-    # ------------------------------------------------------------------
+    # Average focal_dat over years including quantiles, by admin1/pixel/season ----
 
     n_years <- length(unique(focal_dat$year))
 
@@ -2214,25 +2126,12 @@ for(k in 1:length(iso3_choices)){
       by = .(admin1_name, pixel, season_harmonized)
     ]
 
-    focal_dat_avg[
-      ,
-      failed_prop := failed_seasons / (n_years - mismatch - no_detect - s_long_p)
-    ][
-      ,
-      weak_prop := weak_seasons / (n_years - mismatch - no_detect - s_long_p)
-    ][
-      ,
-      mismatch_prop := mismatch / (n_years - failed_seasons - no_detect - s_long_p)
-    ][
-      ,
-      no_detect_prop := no_detect / n_years
-    ][
-      ,
-      s_long_p_prop := s_long_p / n_years
-    ][
-      ,
-      ndvi_weak_prop := ndvi_weak / (n_years - mismatch - no_detect - s_long_p)
-    ]
+    focal_dat_avg[,failed_prop := failed_seasons / (n_years - mismatch - no_detect - s_long_p)
+                  ][,weak_prop := weak_seasons / (n_years - mismatch - no_detect - s_long_p)
+                    ][,mismatch_prop := mismatch / (n_years - failed_seasons - no_detect - s_long_p)
+                      ][,no_detect_prop := no_detect / n_years
+                        ][,s_long_p_prop := s_long_p / n_years
+                          ][,ndvi_weak_prop := ndvi_weak / (n_years - mismatch - no_detect - s_long_p)]
 
     # Merge lat-lon from pixel index
     focal_dat_avg <- merge(
@@ -2246,10 +2145,8 @@ for(k in 1:length(iso3_choices)){
       focal_dat_avg[, c("rain_10", "rain_50", "rain_90", "failed_prop", "weak_prop") := NULL]
     }
 
-    # ------------------------------------------------------------------
-    # Make variables long (sos,eos,rain,slen) for easier plotting
-    # ------------------------------------------------------------------
 
+    # Make variables long (sos,eos,rain,slen) for easier plotting ----
     focal_dat_avg_long <- melt(
       focal_dat_avg[
         ,
@@ -2265,9 +2162,7 @@ for(k in 1:length(iso3_choices)){
 
     params$dat_final$pixel_avg <- focal_dat_avg_long
 
-    # ------------------------------------------------------------------
-    # Make a raster stack for each season where the layers are variables
-    # ------------------------------------------------------------------
+    # Make a raster stack for each season where the layers are variables ----
 
     raster_list <- list()
 
@@ -2315,9 +2210,35 @@ for(k in 1:length(iso3_choices)){
     #   plot_season_stack(raster_list$season_1, circ_palette = "hcl_soft", seq_palette = "viridis")
 
   plot_season_stack(raster_list$season_1, season_name = NULL, circ_palette = "phenology", seq_palette = "magma")
-  plot_season_stack(raster_list$season_2, season_name = NULL, circ_palette = "phenology", seq_palette = "magma")
+
+  for (snm in names(raster_list)) {
+    save_plot_season_stack(
+      r = raster_list[[snm]],
+      output_dir_plot = output_dir_plot,
+      filename = paste0(iso3_selected, "_", snm, "_full_stack.png"),
+      season_name = NULL,
+      circ_palette = "phenology",
+      seq_palette = "magma",
+      ncol = 3,
+      res=600
+    )
+  }
 
   plot_season_vars(raster_list, vars = "sos")
+
+   for(var in c("sos","eos","slen","rain")){
+    save_plot_season_vars(
+      raster_list = raster_list,
+      output_dir_plot = output_dir_plot,
+      filename = paste0(iso3_selected, "_all_seasons_",var,".png"),
+      vars = var,
+      include_n = TRUE,
+      ncol = 3,
+      circ_palette = "phenology",
+      seq_palette = "ylgnbu",
+      res=600
+    )
+   }
 
   n_prop_min <- 0.1
 

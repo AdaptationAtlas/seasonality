@@ -190,9 +190,11 @@ pblapply(tolower(vars),FUN=function(var){
   s3 <- s3fs::S3FileSystem$new(anonymous = TRUE)
 
   s3_files<-c(
-    admin_0_file="s3://digital-atlas/domain=boundaries/type=admin/source=gaul2024/region=africa/processing=simplified/level=adm0/atlas_gaul24_a0_africa_simple-highres.parquet",
-    admin_1_file="s3://digital-atlas/domain=boundaries/type=admin/source=gaul2024/region=africa/processing=simplified/level=adm1/atlas_gaul24_a1_africa_simple-highres.parquet"
+    admin_0_file="s3://digital-atlas/boundaries/atlas-region_admin0_simplified.parquet",
+    admin_1_file="s3://digital-atlas/boundaries/atlas-region_admin1_simplified.parquet",
+    admin_2_file="s3://digital-atlas/boundaries/atlas-region_admin2_simplified.parquet"
   )
+
 
   local_files<-file.path(dirs$boundaries,basename(s3_files))
 
