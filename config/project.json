@@ -22,9 +22,12 @@
   "validation": {
     "ceepa": {
       "article_id": 2069738,
-      "doi": "10.6084/m9.figshare.c.1574094_D9.v1",
+      "doi": "10.6084/m9.figshare.c.1574094",
       "download_url": "https://ndownloader.figshare.com/files/3697976",
-      "md5": "36e190be5b07c9a17a70f73164ba05cd"
+      "md5": "36e190be5b07c9a17a70f73164ba05cd",
+      "comparison_year": 2003,
+      "min_observed_records": 10,
+      "min_remote_pixels": 10
     }
   },
   "outputs": {

@@ -54,6 +54,12 @@ circ_dist <- function(x, y, n_days = 365) {
   pmin(d, n_days - d)
 }
 
+#' Signed shortest circular difference (x minus y)
+#' @export
+signed_circ_diff <- function(x, y, n_days = 365) {
+  ((x - y + n_days / 2) %% n_days) - n_days / 2
+}
+
 #' Forward circular distance
 #' @export
 forward_circ_dist <- function(start, end, n_days = 365) {

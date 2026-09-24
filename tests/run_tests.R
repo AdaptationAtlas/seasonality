@@ -94,6 +94,15 @@ if (nrow(windows) != 2L || any(windows$valley_strength <= 0)) {
 flat_windows <- derive_two_season_windows(rep(100, 12))
 if (nrow(flat_windows) != 0L) stop("Flat rainfall should not produce two peaks.")
 
+assert_equal(
+  in_circular_month_window(c(11L, 1L, 3L, 8L), 10L, 2L),
+  c(TRUE, TRUE, FALSE, FALSE)
+)
+assert_equal(
+  signed_circ_diff(c(10, 350), c(350, 10)),
+  c(25, -25)
+)
+
 glass_dates <- parse_glass_ndvi_dates(c(
   "GLASS13B01.V10.A2000001.2023068.tif",
   "GLASS13B01.V10.A2000365.2023068.tif"

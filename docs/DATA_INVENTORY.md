@@ -33,8 +33,10 @@ Audit date: 2026-09-24. Root: `/Volumes/clim_dat` (override with `ANALOGUE_DATA_
 - `KEN_baseline_monthly_rainfall.parquet`: monthly rainfall climatology.
 - `KEN_detectability_inputs.parquet`: joined pixel-season-year calibration features including aridity, elevation, land cover, and total mapped crop activity.
 - `KEN_candidate_season_windows.parquet`: two candidate rainfall peaks and fixed circular month windows per pixel, with valley-strength diagnostic.
+- `KEN_stable_phenology_events.parquet`: fitted events relabelled into fixed baseline rainfall windows; includes explicit missing seasons and duplicate-candidate counts.
 - `independent_validation/KEN_ceepa_crop_observations.parquet`: decoded Kenya household crop planting/harvest observations with precision and eligibility flags.
 - `independent_validation/KEN_ceepa_crop_calendar_summary.parquet`: crop-calendar summaries by mapped current county, historical district, and named survey season.
+- `independent_validation/KEN_ceepa_remote_validation.*`: county-season comparison of 2003 CEEPA planting/harvest dates with stable GLASS greenup/senescence events.
 
 ## Kenya audit signal
 
@@ -50,6 +52,8 @@ Complete Greenup–Senescence pair rate by aridity class:
 Median R² remains high (0.933 in humid class). Conclusion: fitted-curve goodness alone cannot establish seasonal detectability. Need amplitude/timing-concentration and rainfall-seasonality diagnostics.
 
 Raw annual NDVI audit adds second warning: correctly calendar-aligned median annual amplitude is 0.160 in humid pixels and 0.136 in arid pixels, versus 0.227–0.230 in semi-arid/sub-humid pixels. Low amplitude therefore occurs both in evergreen humid systems and sparsely vegetated arid systems. Classification must combine amplitude, timing concentration, event coverage, rainfall seasonality, and land cover; amplitude alone is unsafe.
+
+Initial independent comparison covers 61 county-seasons with at least 10 CEEPA observations and 10 quality-screened mapped-crop pixels. Median GLASS greenup occurs 10 days after reported planting; median absolute timing difference is 15.5 days. Remote quality-event coverage is 0.59 median. Larger western/humid discrepancies require targeted review rather than global threshold tuning. Planting-to-greenup lag and planting/harvest versus greenup/senescence definitions mean these are diagnostic differences, not interchangeable dates.
 
 ## Known integrity concerns
 

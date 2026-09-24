@@ -69,3 +69,10 @@
 - Status: accepted
 - Decision: Use CEEPA Kenya crop-specific planting and harvest observations to validate 2003/04 onset and season length at mapped county/historical-district scale. Preserve reported date precision; exclude unparsed, continuous/perennial, and clearly out-of-period records from primary scores.
 - Reason: Survey provides broad crop and ecological coverage but only one agricultural year and no household coordinates. It can test event timing and coverage, not historical trends or pixel accuracy.
+
+## D011 — Relabel fitted events using stable rainfall windows
+
+- Date: 2026-09-24
+- Status: accepted
+- Decision: Assign every fitted greenup event to its fixed baseline rainfall window, then select one event per pixel-year-window using completeness, fit quality, and distance from the baseline rainfall peak. Preserve source season label and duplicate count.
+- Reason: Raw fitted season numbers are not stable. In some counties raw season 1 is the October event while raw season 2 is the March event, causing label swaps and invalid long/short-rains comparisons.

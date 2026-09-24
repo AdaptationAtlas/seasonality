@@ -23,6 +23,8 @@
 - Added eight detailed review panels: seasonal NDVI/rainfall climatology and annual wet-anomaly/event histories for each diagnostic stratum. Added structured human review sheet; labels remain blank until review.
 - Visual QA exposed partial-year `as.Date()` behavior that shifted new GLASS dates to September-based years. Added strict `AYYYYDDD` parser and regression test; rebuilt all NDVI-dependent recovery derivatives. Rainfall products were unaffected.
 - Downloaded checksum-verified CEEPA survey archive from Figshare and decoded 816 Kenya households across 44 historical districts. Added reproducible downloader, crop/date parser, county crosswalk, and independent planting/harvest validation products. Single-year district-level evidence is reserved for event validation, not trend inference.
+- Relabelled fitted phenology events into fixed baseline rainfall windows, resolving raw season-number swaps. Produced 912,650 pixel-year-season rows for 18,253 pixels with explicit missing events and duplicate-candidate provenance.
+- Compared 2003 stable GLASS events with CEEPA annual-crop observations. Across 61 county-seasons meeting minimum sample sizes, median greenup lag after planting is 10 days, median absolute timing difference is 15.5 days, and median quality-event coverage is 0.59. Humid/western outliers remain targeted calibration cases.
 - Added final interactive viewer and deployment workstream to roadmap.
 
-Next: build/test Kenya detectability classifier and stable baseline season windows on representative regions.
+Next: review CEEPA timing outliers by ecological regime, calibrate bimodal acceptance and detectability thresholds, then freeze source-aware phenology rules.

@@ -5,6 +5,20 @@ circular_month_distance <- function(a, b) {
   pmin(distance, 12 - distance)
 }
 
+in_circular_month_window <- function(month, start, end) {
+  n <- max(length(month), length(start), length(end))
+  month <- rep_len(month, n)
+  start <- rep_len(start, n)
+  end <- rep_len(end, n)
+  out <- rep(NA, n)
+  ok <- !is.na(month) & !is.na(start) & !is.na(end)
+  out[ok & start <= end] <- month[ok & start <= end] >= start[ok & start <= end] &
+    month[ok & start <= end] <= end[ok & start <= end]
+  out[ok & start > end] <- month[ok & start > end] >= start[ok & start > end] |
+    month[ok & start > end] <= end[ok & start > end]
+  out
+}
+
 circular_month_sequence <- function(start, end, include_start = TRUE, include_end = TRUE) {
   sequence <- ((start - 1L + 0:11) %% 12L) + 1L
   end_position <- match(end, sequence)
