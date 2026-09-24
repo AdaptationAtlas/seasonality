@@ -6,6 +6,7 @@ source("R/functions/project_logging.R")
 source("R/functions/detectability.R")
 source("R/functions/rainfall_seasonality.R")
 source("R/functions/season_windows.R")
+source("R/functions/ndvi_dates.R")
 
 assert_equal <- function(actual, expected, tolerance = 1e-8) {
   if (!isTRUE(all.equal(actual, expected, tolerance = tolerance))) {
@@ -91,5 +92,14 @@ if (nrow(windows) != 2L || any(windows$valley_strength <= 0)) {
 
 flat_windows <- derive_two_season_windows(rep(100, 12))
 if (nrow(flat_windows) != 0L) stop("Flat rainfall should not produce two peaks.")
+
+glass_dates <- parse_glass_ndvi_dates(c(
+  "GLASS13B01.V10.A2000001.2023068.tif",
+  "GLASS13B01.V10.A2000365.2023068.tif"
+))
+assert_equal(
+  as.character(glass_dates),
+  c("2000-01-01", "2000-12-30")
+)
 
 cat("All tests passed.\n")

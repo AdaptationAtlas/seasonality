@@ -9,6 +9,7 @@ suppressPackageStartupMessages({
 source("R/functions/project_logging.R")
 source("R/functions/circular_utils.R")
 source("R/functions/detectability.R")
+source("R/functions/ndvi_dates.R")
 
 config <- read_project_config()
 run <- new_run_context("kenya-signal-metrics", config$country$iso3)
@@ -38,8 +39,7 @@ ndvi_files <- sort(list.files(ndvi_dir, pattern = "\\.tif$", full.names = TRUE))
 if (!length(ndvi_files)) stop("No GLASS NDVI GeoTIFF files found in ", ndvi_dir)
 if (!file.exists(pheno_file)) stop("Kenya phenology file not found: ", pheno_file)
 
-tokens <- sub(".*\\.A([0-9]{7})\\..*", "\\1", basename(ndvi_files))
-ndvi_dates <- as.Date(substr(tokens, 1, 4), format = "%Y") + as.integer(substr(tokens, 5, 7)) - 1L
+ndvi_dates <- parse_glass_ndvi_dates(ndvi_files)
 keep <- as.integer(format(ndvi_dates, "%Y")) >= config$baseline$start_year &
   as.integer(format(ndvi_dates, "%Y")) <= config$baseline$end_year
 ndvi_files <- ndvi_files[keep]

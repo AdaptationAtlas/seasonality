@@ -40,7 +40,7 @@
 - Date: 2026-09-24
 - Status: accepted
 - Decision: Never classify detectability from NDVI amplitude or fit score alone. Combine annual amplitude, timing concentration, event-year coverage, rainfall seasonality, wet anomaly, and land-cover context.
-- Reason: Kenya median NDVI amplitude is low in both humid (0.160) and arid (0.127) classes for different ecological reasons; fit scores remain deceptively high.
+- Reason: Correctly calendar-aligned Kenya median NDVI amplitude is low in both humid (0.160) and arid (0.136) classes for different ecological reasons; fit scores remain deceptively high.
 
 ## D007 — Preserve full domain; flag agricultural relevance
 

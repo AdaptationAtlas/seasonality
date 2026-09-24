@@ -46,7 +46,7 @@ Complete Greenup–Senescence pair rate by aridity class:
 
 Median R² remains high (0.933 in humid class). Conclusion: fitted-curve goodness alone cannot establish seasonal detectability. Need amplitude/timing-concentration and rainfall-seasonality diagnostics.
 
-Raw annual NDVI audit adds second warning: median annual amplitude is 0.160 in humid pixels and 0.127 in arid pixels, versus 0.220–0.229 in semi-arid/sub-humid pixels. Low amplitude therefore occurs both in evergreen humid systems and sparsely vegetated arid systems. Classification must combine amplitude, timing concentration, event coverage, rainfall seasonality, and land cover; amplitude alone is unsafe.
+Raw annual NDVI audit adds second warning: correctly calendar-aligned median annual amplitude is 0.160 in humid pixels and 0.136 in arid pixels, versus 0.227–0.230 in semi-arid/sub-humid pixels. Low amplitude therefore occurs both in evergreen humid systems and sparsely vegetated arid systems. Classification must combine amplitude, timing concentration, event coverage, rainfall seasonality, and land cover; amplitude alone is unsafe.
 
 ## Known integrity concerns
 
