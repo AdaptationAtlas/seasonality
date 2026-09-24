@@ -20,11 +20,15 @@ checks <- list(
     data_root, "static_raw", "boundaries",
     "atlas_gaul24_a1_africa_simple-highres.parquet"
   )),
+  kenya_chirps = file.exists(file.path(
+    data_root, "climate_raw", "chirps", "chirps_v3_cog_countries",
+    "KEN.parquet"
+  )),
   gdal_translate = nzchar(Sys.which("gdal_translate"))
 )
 
 required_packages <- c(
-  "arrow", "data.table", "jsonlite", "lubridate", "terra"
+  "arrow", "data.table", "DBI", "duckdb", "jsonlite", "lubridate", "terra"
 )
 package_checks <- setNames(
   vapply(required_packages, requireNamespace, logical(1), quietly = TRUE),

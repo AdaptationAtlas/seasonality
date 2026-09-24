@@ -41,3 +41,17 @@
 - Status: accepted
 - Decision: Never classify detectability from NDVI amplitude or fit score alone. Combine annual amplitude, timing concentration, event-year coverage, rainfall seasonality, wet anomaly, and land-cover context.
 - Reason: Kenya median NDVI amplitude is low in both humid (0.160) and arid (0.127) classes for different ecological reasons; fit scores remain deceptively high.
+
+## D007 — Preserve full domain; flag agricultural relevance
+
+- Date: 2026-09-24
+- Status: accepted
+- Decision: Keep all Kenya pixels in scientific derivatives, but include land cover, mapped crop activity, and crop-presence flags. Decision summaries can filter or weight agricultural pixels explicitly.
+- Reason: Hard masking would hide ecological transitions and uncertain crop-map omissions; unflagged all-land summaries would let forest, bare ground, and shrubland dominate agricultural interpretation.
+
+## D008 — Rainfall windows are candidates until calibrated
+
+- Date: 2026-09-24
+- Status: accepted
+- Decision: Derive fixed circular windows from baseline rainfall peaks and troughs, but accept bimodality only after peak/valley strength, NDVI timing, crop relevance, and validation agree.
+- Reason: Two mathematical rainfall peaks occur for 18,253 phenology pixels, but median dry-valley strength differs sharply: about 0.81 in arid crop pixels versus 0.28 in humid crop pixels. Counting peaks alone would overstate meaningful bimodality.

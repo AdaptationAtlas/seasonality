@@ -13,8 +13,8 @@ Decision-ready Kenya admin1/admin2 time series describing onset, end, season len
 | P0.1 | DONE | Repository and data audit | Code, Git, Kenya inputs, and known defects documented |
 | P0.2 | DONE | AI project scaffolding | `AGENTS.md`, config, worklog, decisions, preflight, tests, JSONL logging |
 | P0.3 | TODO | Dependency lock | `renv.lock` restores clean environment without `pacman` auto-install |
-| P1.1 | IN PROGRESS | Kenya detectability classifier | Metric builder and pathway function added; thresholds still require calibration/validation |
-| P1.2 | TODO | Stable Kenya season windows | Baseline windows prevent year-to-year label switching and wet-year season merging |
+| P1.1 | IN PROGRESS | Kenya detectability classifier | NDVI/rainfall builders, combined calibration table, and pathway function added; thresholds require calibration/validation |
+| P1.2 | IN PROGRESS | Stable Kenya season windows | Circular rainfall peak/window builder added; bimodal acceptance threshold requires calibration |
 | P1.3 | TODO | Phenology estimator | Source-aware dates plus confidence; no forced dates for aseasonal pixels |
 | P1.4 | TODO | Independent validation | Kenya crop calendars/planting observations; error and coverage by ecological zone |
 | P2.1 | TODO | Historical indicators | Annual onset/end/length plus baseline quantiles, variability, min/max, and robust trends |

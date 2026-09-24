@@ -4,6 +4,8 @@ source("R/functions/circular_utils.R")
 source("R/functions/season_assignment.R")
 source("R/functions/project_logging.R")
 source("R/functions/detectability.R")
+source("R/functions/rainfall_seasonality.R")
+source("R/functions/season_windows.R")
 
 assert_equal <- function(actual, expected, tolerance = 1e-8) {
   if (!isTRUE(all.equal(actual, expected, tolerance = tolerance))) {
@@ -60,5 +62,34 @@ assert_equal(
   as.character(paths),
   c("ndvi_seasonal", "rainfall_proxy", "wet_merged", "insufficient_data")
 )
+
+uniform_rain <- rep(100, 12)
+uniform_metrics <- rainfall_seasonality_metrics(uniform_rain)
+assert_equal(uniform_metrics$rainfall_si, 0)
+assert_equal(uniform_metrics$rain_h1, 0, tolerance = 1e-12)
+assert_equal(uniform_metrics$rain_h2, 0, tolerance = 1e-12)
+
+unimodal_rain <- rep(0, 12)
+unimodal_rain[4] <- 100
+unimodal_metrics <- rainfall_seasonality_metrics(unimodal_rain)
+assert_equal(unimodal_metrics$rain_h1, 1)
+assert_equal(unimodal_metrics$rain_h2, 1)
+assert_equal(unimodal_metrics$wettest_month, 4)
+
+bimodal_rain <- rep(0, 12)
+bimodal_rain[c(4, 10)] <- 100
+bimodal_metrics <- rainfall_seasonality_metrics(bimodal_rain)
+assert_equal(bimodal_metrics$rain_h1, 0, tolerance = 1e-12)
+assert_equal(bimodal_metrics$rain_h2, 1)
+
+window_rain <- c(5, 10, 40, 100, 60, 15, 5, 10, 30, 80, 50, 10)
+windows <- derive_two_season_windows(window_rain, min_peak_separation = 3L)
+assert_equal(windows$peak_month, c(4, 10))
+if (nrow(windows) != 2L || any(windows$valley_strength <= 0)) {
+  stop("Two-season rainfall windows failed.")
+}
+
+flat_windows <- derive_two_season_windows(rep(100, 12))
+if (nrow(flat_windows) != 0L) stop("Flat rainfall should not produce two peaks.")
 
 cat("All tests passed.\n")

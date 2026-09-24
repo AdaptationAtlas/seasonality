@@ -13,5 +13,10 @@
 - Added annual raw-NDVI signal metric builder and explicit source-path classifier. Thresholds remain calibration inputs, not assumed truths.
 - Built 463,375 annual raw-NDVI metric rows for 18,535 Kenya pixels covering 2000–2024. Found low amplitude in both humid evergreen and arid sparse-vegetation settings, confirming need for multi-signal classification.
 - Replaced corrupt admin2 placeholder with validated 17 MB Parquet from current S3 key; retained original XML error file for provenance.
+- Added out-of-memory-safe DuckDB aggregation for Kenya CHIRPS: monthly totals, annual rainfall seasonality/harmonics, robust wet anomalies, and baseline monthly climatology.
+- Added calibration-table assembly joining NDVI, rainfall, event timing, aridity, elevation, and land cover by shared raster pixel ID.
+- Added total MapSPAM crop activity and crop-presence flag to distinguish agricultural pixels from evergreen forest, bare ground, and other weak-signal regimes.
+- Added circular rainfall peak detection and candidate fixed windows. Window diagnostics retain uncertainty; no bimodal threshold is forced before calibration.
+- Built fixed-window candidates for 18,253 pixels. Dominant crop-pixel rainfall peaks are April/November. Dry-valley strength is much lower in humid crop pixels (~0.28 median) than arid crop pixels (~0.81), confirming peak count alone cannot define seasons.
 
 Next: build/test Kenya detectability classifier and stable baseline season windows on representative regions.

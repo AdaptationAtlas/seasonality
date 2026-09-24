@@ -16,6 +16,9 @@
     "ndvi_nse_min": 0.6,
     "ndvi_r2_min": 0.6
   },
+  "season_windows": {
+    "min_peak_separation_months": 3
+  },
   "outputs": {
     "table_format": "parquet",
     "raster_format": "COG",

@@ -23,6 +23,16 @@ Audit date: 2026-09-24. Root: `/Volumes/clim_dat` (override with `ANALOGUE_DATA_
 - SRTM elevation: `static_raw/strm`
 - Existing run outputs: `output/2026-03-27` and `output/2026-03-28`
 
+## Kenya recovery derivatives
+
+- `KEN_annual_signal_metrics.parquet`: annual NDVI amplitude, coverage, and event counts.
+- `KEN_baseline_season_signal_metrics.parquet`: baseline event coverage and circular timing concentration by candidate season.
+- `KEN_monthly_rainfall.parquet`: CHIRPS monthly totals for 2000–2024.
+- `KEN_annual_rainfall_metrics.parquet`: annual rainfall total, Walsh–Lawler seasonality, first/second harmonics, and robust wet anomaly.
+- `KEN_baseline_monthly_rainfall.parquet`: monthly rainfall climatology.
+- `KEN_detectability_inputs.parquet`: joined pixel-season-year calibration features including aridity, elevation, land cover, and total mapped crop activity.
+- `KEN_candidate_season_windows.parquet`: two candidate rainfall peaks and fixed circular month windows per pixel, with valley-strength diagnostic.
+
 ## Kenya audit signal
 
 Complete Greenup–Senescence pair rate by aridity class:
