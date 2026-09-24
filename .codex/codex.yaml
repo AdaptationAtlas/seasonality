@@ -5,8 +5,8 @@ workspace:
 
 commands:
   test: "Rscript tests/run_tests.R"
-  lint: "lintr::lint_dir()"
-  build: "quarto render"
+  lint: "Rscript -e 'lintr::lint_dir(c(\"R\", \"scripts\", \"tests\"))'"
+  preflight: "Rscript scripts/preflight.R"
 
 safety:
   confirm_destructive: true

@@ -1,0 +1,24 @@
+{
+  "project": "seasonality",
+  "country": {
+    "name": "Kenya",
+    "iso3": "KEN"
+  },
+  "baseline": {
+    "start_year": 2000,
+    "end_year": 2024
+  },
+  "data_root_env": "ANALOGUE_DATA_ROOT",
+  "data_root_default": "/Volumes/clim_dat",
+  "phenology": {
+    "max_seasons": 2,
+    "min_years": 3,
+    "ndvi_nse_min": 0.6,
+    "ndvi_r2_min": 0.6
+  },
+  "outputs": {
+    "table_format": "parquet",
+    "raster_format": "COG",
+    "runtime_log_format": "jsonl"
+  }
+}

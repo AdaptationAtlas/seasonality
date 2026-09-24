@@ -1,26 +1,42 @@
-# seasonality
-This project is for the calculation of seasonality from daily CHIRPS rainfall and Hoffman ETo data
+# Kenya seasonality
 
-## Outputs
+Reproducible estimation of growing-season onset, end, and length from GLASS NDVI and CHIRPS rainfall. Current development focuses on Kenya and historical baseline 2000–2024.
 
-Files are saved in a folder with a name derived from the input parameters, for example:   `../S2mm0-Pad3x3-D1mm25-D2mm20-D2l2-AIt0.5-SqMT-SqMLTT-MxGp1-MiSL1-MaSL1-ClAIF-S2Pr0.25-S2l1-AIsF-RBT-S1AITRUE`  
+Project handles four states explicitly:
 
-Where:
-  `S2mm` = The minimum rainfall required for second rainy season at a location (`MinRain`)
-  `-Pad` = PadBack,"x",PadForward,
-  "-D1mm",D1.mm,
-  "-D2mm",D2.mm,
-  "-D2l",D2.len,
-  "-AIt",AI.t, 
-  "-SqM",substr(Do.SeqMerge,1,1),
-  "-SqMLT",substr(Do.SeqMerge.LT,1,1),
-  "-MxGp",MaxGap,
-  "-MiSL",MinStartLen,
-  "-MaSL",MaxStartSep,
-  "-ClAI",substr(ClipAI,1,1),
-  "-S2Pr",Season2.Prop,
-  "-S2l",MinLength,
-  "-AIs",substr(AI_Seasonal,1,1),
-  "-RB",substr(RollBack,1,1),
-  "-ST",SOSSimThresh*100,
-  "-S1AI",S1.AI
+1. NDVI-seasonal: vegetation phenology supplies dates.
+2. Weak NDVI but rainfall-seasonal: rainfall may supply proxy dates after validation.
+3. Wet-year merged season: baseline windows retain stable season identity.
+4. Evergreen/aseasonal: onset is reported as not identifiable.
+
+## Setup
+
+Source data remain outside repository. Default root is `/Volumes/clim_dat`; override when needed:
+
+```sh
+export ANALOGUE_DATA_ROOT=/path/to/climate-data
+Rscript scripts/preflight.R
+Rscript tests/run_tests.R
+```
+
+Runtime logs are written as JSON Lines under `logs/` and ignored by Git.
+
+## Project records
+
+- [Roadmap](docs/ROADMAP.md)
+- [Scientific and technical decisions](docs/DECISIONS.md)
+- [Data inventory](docs/DATA_INVENTORY.md)
+- [Work log](docs/WORKLOG.md)
+- [AI coding instructions](AGENTS.md)
+
+## Current pipeline
+
+| Stage | Script | Purpose |
+|---|---|---|
+| Setup | `R/0-1_setup_folders.R` | Resolve external data root and expected folders |
+| Download | `R/0-2_download_datasets.R` | Acquire climate/static inputs |
+| Rainfall | `R/1-1_process_chirps.R` | Prepare CHIRPS time series |
+| Phenology | `R/1-2_process_nvdi.R` | Fit GLASS NDVI curves and extract candidate events |
+| Summaries | `R/2-1_admin1_pheno_summaries.r` | Harmonize seasons, apply QC, and create outputs |
+
+Current scripts remain legacy orchestration. Roadmap refactors them into tested, resumable Kenya stages before scientific production use.

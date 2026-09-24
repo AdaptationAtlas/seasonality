@@ -2,14 +2,14 @@
 # -----------------------------------------------------------
 # 00_setup_folders.R   (run once after you mounted the SSD)
 # -----------------------------------------------------------
-Sys.setenv(ANALOGUE_DATA_ROOT = "/Volumes/clim_dat")
-root <- Sys.getenv("ANALOGUE_DATA_ROOT")
+root <- Sys.getenv("ANALOGUE_DATA_ROOT", unset = "/Volumes/clim_dat")
+Sys.setenv(ANALOGUE_DATA_ROOT = root)
 
 Sys.setenv(PATH = paste("/opt/homebrew/bin", Sys.getenv("PATH"), sep = ":"))
 Sys.which("gdal_translate")
 
 if (!dir.exists(root)) {
-  stop("⚠️  ANAlOGUE_DATA_ROOT does not exist.")
+  stop("⚠️  ANALOGUE_DATA_ROOT does not exist: ", root)
 }
 
 dirs <- list(
@@ -31,6 +31,7 @@ dirs <- list(
   nvdi_phenology="climate_derived/glass_phenology",
   rf_forests="models/rf_forests",
   validation_reports="models/validation_reports",
+  logs="logs",
   output="output")
 
 dir_names<-names(dirs)
@@ -47,9 +48,12 @@ meta <- list(
   hostname = Sys.info()[["nodename"]],
   root     = root
 )
-jsonlite::write_json(meta, file.path(root, "climate_derived", "setup_meta.json"), auto_unbox = TRUE, pretty = TRUE)
+meta_file <- file.path(root, "climate_derived", "setup_meta.json")
+if (!file.exists(meta_file)) {
+  jsonlite::write_json(meta, meta_file, auto_unbox = TRUE, pretty = TRUE)
+}
 
-cat("✅ Folder structure created under", root, "\n")
+message("✅ Data root ready: ", root)
 
 list_dirs <- function(path, depth = 2, indent = 0) {
   cat(strrep(" ", indent), basename(path), "\n", sep = "")
@@ -58,7 +62,9 @@ list_dirs <- function(path, depth = 2, indent = 0) {
   for (d in dirs) list_dirs(d, depth - 1, indent + 2)
 }
 
-print(list_dirs(root, depth = 3))
+if (identical(tolower(Sys.getenv("SEASONALITY_VERBOSE_SETUP")), "true")) {
+  list_dirs(root, depth = 3)
+}
 
 # Make africa bbox
 af_bbox<-c(

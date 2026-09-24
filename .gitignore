@@ -2,3 +2,15 @@
 .Rhistory
 .RData
 .Ruserdata
+*.Rproj.user
+.DS_Store
+
+# Runtime artefacts (source data live outside repository)
+logs/
+output/
+*.log
+
+# Local secrets and machine-specific configuration
+.env
+.env.*
+!.env.example
