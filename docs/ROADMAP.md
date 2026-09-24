@@ -22,6 +22,8 @@ Decision-ready Kenya admin1/admin2 time series describing onset, end, season len
 | P2.3 | TODO | Admin1/admin2 aggregation | Area-aware summaries, coverage, confidence, and method composition |
 | P3.1 | TODO | Reproducible pipeline | Staged `{targets}` pipeline with resumable Kenya-only execution |
 | P3.2 | TODO | Decision products | Parquet time series, COG rasters, QA report, metadata/data dictionary |
+| P4.1 | TODO | Interactive data viewer | Map with year/season/metric controls, source/confidence filters, admin1/admin2 drill-down, pixel time series, and downloads |
+| P4.2 | TODO | Viewer deployment | Publish documented, versioned viewer using derived products only; include data/version timestamp and methodology links |
 
 ## Immediate sequence
 
@@ -30,6 +32,7 @@ Decision-ready Kenya admin1/admin2 time series describing onset, end, season len
 3. Implement detectability classes and stable season windows as tested pure functions.
 4. Compare NDVI and rainfall pathways against known Kenya calendars.
 5. Produce pilot admin1 outputs; add admin2 after boundary repair.
+6. Build interactive viewer after indicators and aggregation contracts stabilize.
 
 ## Definition of done
 
@@ -38,3 +41,4 @@ Decision-ready Kenya admin1/admin2 time series describing onset, end, season len
 - Every indicator includes observation count, coverage, method source, and confidence.
 - Circular date statistics and trends pass year-boundary tests.
 - Kenya validation report states where onset is reliable, proxy-derived, or not identifiable.
+- Viewer exposes spatial layers, historical time series, uncertainty, method source, and downloadable admin summaries.

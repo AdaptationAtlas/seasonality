@@ -55,3 +55,10 @@
 - Status: accepted
 - Decision: Derive fixed circular windows from baseline rainfall peaks and troughs, but accept bimodality only after peak/valley strength, NDVI timing, crop relevance, and validation agree.
 - Reason: Two mathematical rainfall peaks occur for 18,253 phenology pixels, but median dry-valley strength differs sharply: about 0.81 in arid crop pixels versus 0.28 in humid crop pixels. Counting peaks alone would overstate meaningful bimodality.
+
+## D009 — Viewer follows stable data contracts
+
+- Date: 2026-09-24
+- Status: accepted
+- Decision: Build interactive viewer only after annual indicators, confidence fields, and admin aggregation schemas stabilize. Viewer must use derived products, not scan raw climate archives.
+- Reason: Separating computation from presentation keeps viewer responsive, reproducible, and cheap to deploy while preventing UI choices from shaping scientific methods.

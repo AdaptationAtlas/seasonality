@@ -18,5 +18,8 @@
 - Added total MapSPAM crop activity and crop-presence flag to distinguish agricultural pixels from evergreen forest, bare ground, and other weak-signal regimes.
 - Added circular rainfall peak detection and candidate fixed windows. Window diagnostics retain uncertainty; no bimodal threshold is forced before calibration.
 - Built fixed-window candidates for 18,253 pixels. Dominant crop-pixel rainfall peaks are April/November. Dry-valley strength is much lower in humid crop pixels (~0.28 median) than arid crop pixels (~0.81), confirming peak count alone cannot define seasons.
+- Added calibration diagnostics: empirical quantiles, stratified review sample, wet/missing-season candidates, signal plots, and candidate map.
+- Generated balanced 48-pixel review sample (12 per diagnostic stratum) and 3,414 wet/missing-season candidate records across 1,423 pixels. Largest candidate counts occur in 2023, 2019, 2020, and 2006; these remain review candidates, not accepted classifications.
+- Added final interactive viewer and deployment workstream to roadmap.
 
 Next: build/test Kenya detectability classifier and stable baseline season windows on representative regions.
