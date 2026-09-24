@@ -25,6 +25,10 @@
 - Downloaded checksum-verified CEEPA survey archive from Figshare and decoded 816 Kenya households across 44 historical districts. Added reproducible downloader, crop/date parser, county crosswalk, and independent planting/harvest validation products. Single-year district-level evidence is reserved for event validation, not trend inference.
 - Relabelled fitted phenology events into fixed baseline rainfall windows, resolving raw season-number swaps. Produced 912,650 pixel-year-season rows for 18,253 pixels with explicit missing events and duplicate-candidate provenance.
 - Compared 2003 stable GLASS events with CEEPA annual-crop observations. Across 61 county-seasons meeting minimum sample sizes, median greenup lag after planting is 10 days, median absolute timing difference is 15.5 days, and median quality-event coverage is 0.59. Humid/western outliers remain targeted calibration cases.
+- Removed raw season labels from detectability calibration keys. Season-window builder now reads source metadata directly; stable `season_id` propagates through inputs, reports, samples, and review panels.
+- Added provisional multi-signal pathway classifier and explicit `not_identifiable`, `missing_ndvi_event`, `rainfall_proxy`, and `wet_merged` outcomes. Thresholds remain configuration-controlled and unaccepted pending human review.
+- Added ecological CEEPA diagnostics. All 13 discordant county-seasons (at least 45 days difference) are humid-dominant; their median classifier `not_identifiable` share is 1.00. Twenty-five humid-dominant county-seasons remain aligned, confirming humidity alone must not drive masking.
+- Documented reproducible Kenya pipeline order and removed season-window/classifier circular dependency.
 - Added final interactive viewer and deployment workstream to roadmap.
 
-Next: review CEEPA timing outliers by ecological regime, calibrate bimodal acceptance and detectability thresholds, then freeze source-aware phenology rules.
+Next: inspect labelled review panels, tune provisional thresholds if warranted, then implement rainfall-proxy onset/end dates and confidence scores.

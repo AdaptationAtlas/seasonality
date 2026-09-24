@@ -32,11 +32,9 @@ if (!all(file.exists(c(input_file, windows_file, coords_file)))) {
 dat <- as.data.table(read_parquet(input_file))
 windows <- as.data.table(read_parquet(windows_file))
 coords <- as.data.table(read_parquet(coords_file))[, .(pixel, x, y)]
-valley_by_pixel <- unique(windows[, .(pixel, valley_strength)])
-dat <- valley_by_pixel[dat, on = .(pixel)]
 
 baseline_fields <- c(
-  "pixel", "admin1_name", "raw_season", "aridity_bin", "elev_bin",
+  "pixel", "admin1_name", "season_id", "aridity_bin", "elev_bin",
   "landcover_short", "crop_area_total", "has_mapped_crop",
   "ndvi_amplitude_median", "event_coverage", "timing_concentration",
   "baseline_rainfall_si", "baseline_rain_h1", "baseline_rain_h2",
@@ -54,7 +52,7 @@ baseline <- coords[baseline, on = .(pixel)]
 pixel_summary <- dcast(
   baseline,
   pixel + admin1_name + aridity_bin + elev_bin + landcover_short +
-    crop_area_total + has_mapped_crop + x + y + valley_strength + peak_1 + peak_2 ~ raw_season,
+    crop_area_total + has_mapped_crop + x + y + valley_strength + peak_1 + peak_2 ~ season_id,
   value.var = c("event_coverage", "timing_concentration"),
   fill = NA_real_
 )
@@ -85,10 +83,15 @@ quantiles <- baseline[, {
       value = as.numeric(quantile(values[[metric_name]], quantile_probs, na.rm = TRUE))
     )
   }))
-}, by = .(has_mapped_crop, aridity_bin, raw_season)]
+}, by = .(has_mapped_crop, aridity_bin, season_id)]
 fwrite(quantiles, file.path(report_dir, "calibration_quantiles.csv"))
 
-crop_s1 <- baseline[has_mapped_crop == TRUE & raw_season == 1L]
+crop_s1 <- baseline[has_mapped_crop == TRUE & season_id == 1L]
+crop_s1[, ndvi_strength_score := (
+  frank(ndvi_amplitude_median, ties.method = "average", na.last = "keep") / .N +
+  frank(event_coverage, ties.method = "average", na.last = "keep") / .N +
+  frank(timing_concentration, ties.method = "average", na.last = "keep") / .N
+) / 3]
 thresholds <- list(
   amplitude_low = as.numeric(quantile(crop_s1$ndvi_amplitude_median, 0.25, na.rm = TRUE)),
   amplitude_high = as.numeric(quantile(crop_s1$ndvi_amplitude_median, 0.75, na.rm = TRUE)),
@@ -99,7 +102,7 @@ thresholds <- list(
   valley_high = as.numeric(quantile(crop_s1$valley_strength, 0.75, na.rm = TRUE))
 )
 
-crop_s2_year <- dat[has_mapped_crop == TRUE & raw_season == 2L]
+crop_s2_year <- dat[has_mapped_crop == TRUE & season_id == 2L]
 thresholds$wet_anomaly_high <- as.numeric(quantile(crop_s2_year$wet_anomaly, 0.9, na.rm = TRUE))
 jsonlite::write_json(
   thresholds,
@@ -120,19 +123,16 @@ write_parquet(
 )
 
 candidate_sets <- list(
-  strong_ndvi = baseline[
-    has_mapped_crop == TRUE & raw_season == 1L &
-      ndvi_amplitude_median >= thresholds$amplitude_high &
-      event_coverage >= thresholds$coverage_high &
-      timing_concentration >= thresholds$concentration_high
+  strong_ndvi = crop_s1[
+    ndvi_strength_score >= quantile(ndvi_strength_score, 0.9, na.rm = TRUE)
   ],
   weak_ndvi_rain_seasonal = baseline[
-    has_mapped_crop == TRUE & raw_season == 1L &
+    has_mapped_crop == TRUE & season_id == 1L &
       ndvi_amplitude_median <= thresholds$amplitude_low &
       baseline_rainfall_signal >= thresholds$rainfall_signal_high
   ],
   humid_weak = baseline[
-    has_mapped_crop == TRUE & raw_season == 1L & aridity_bin == "humid" &
+    has_mapped_crop == TRUE & season_id == 1L & aridity_bin == "humid" &
       ndvi_amplitude_median <= thresholds$amplitude_low &
       baseline_rainfall_signal <= thresholds$rainfall_signal_low
   ],
@@ -159,7 +159,7 @@ p_signal <- ggplot(
   aes(ndvi_amplitude_median, event_coverage, colour = baseline_rainfall_signal)
 ) +
   geom_point(alpha = 0.18, size = 0.6) +
-  facet_grid(raw_season ~ aridity_bin) +
+  facet_grid(season_id ~ aridity_bin) +
   scale_colour_viridis_c(option = "C", na.value = "grey70") +
   labs(
     title = "Kenya crop-pixel seasonal signal diagnostics",

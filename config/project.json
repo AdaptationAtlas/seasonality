@@ -19,6 +19,19 @@
   "season_windows": {
     "min_peak_separation_months": 3
   },
+  "detectability": {
+    "status": "provisional",
+    "min_years_with_ndvi": 20,
+    "ndvi_amplitude_min": 0.15,
+    "humid_ndvi_amplitude_min": 0.20,
+    "event_coverage_min": 0.40,
+    "timing_concentration_min": 0.80,
+    "rainfall_signal_min": 0.35,
+    "rainfall_signal_floor": 0.25,
+    "valley_strength_min": 0.30,
+    "bimodal_year_coverage_min": 0.30,
+    "wet_anomaly_min": 2.50
+  },
   "validation": {
     "ceepa": {
       "article_id": 2069738,

@@ -106,3 +106,107 @@ classify_signal_path <- function(
     )
   )
 }
+
+classify_baseline_signal <- function(
+    season_id,
+    aridity_bin,
+    years_with_ndvi,
+    ndvi_amplitude,
+    event_coverage,
+    timing_concentration,
+    rainfall_signal,
+    valley_strength,
+    bimodal_year_coverage,
+    thresholds) {
+  required <- c(
+    "min_years_with_ndvi", "ndvi_amplitude_min", "humid_ndvi_amplitude_min",
+    "event_coverage_min", "timing_concentration_min", "rainfall_signal_min",
+    "rainfall_signal_floor", "valley_strength_min", "bimodal_year_coverage_min"
+  )
+  missing_thresholds <- setdiff(required, names(thresholds))
+  if (length(missing_thresholds)) {
+    stop("Missing thresholds: ", paste(missing_thresholds, collapse = ", "))
+  }
+
+  n <- max(
+    length(season_id), length(aridity_bin), length(years_with_ndvi),
+    length(ndvi_amplitude), length(event_coverage), length(timing_concentration),
+    length(rainfall_signal), length(valley_strength), length(bimodal_year_coverage)
+  )
+  recycle <- function(x) rep_len(x, n)
+  season_id <- recycle(season_id)
+  aridity_bin <- as.character(recycle(aridity_bin))
+  years_with_ndvi <- recycle(years_with_ndvi)
+  ndvi_amplitude <- recycle(ndvi_amplitude)
+  event_coverage <- recycle(event_coverage)
+  timing_concentration <- recycle(timing_concentration)
+  rainfall_signal <- recycle(rainfall_signal)
+  valley_strength <- recycle(valley_strength)
+  bimodal_year_coverage <- recycle(bimodal_year_coverage)
+
+  enough_years <- !is.na(years_with_ndvi) &
+    years_with_ndvi >= thresholds$min_years_with_ndvi
+  amplitude_min <- ifelse(
+    aridity_bin == "humid",
+    thresholds$humid_ndvi_amplitude_min,
+    thresholds$ndvi_amplitude_min
+  )
+  ndvi_evidence <- enough_years &
+    !is.na(ndvi_amplitude) & ndvi_amplitude >= amplitude_min &
+    !is.na(event_coverage) & event_coverage >= thresholds$event_coverage_min &
+    !is.na(timing_concentration) & timing_concentration >= thresholds$timing_concentration_min
+
+  rain_evidence <- !is.na(rainfall_signal) &
+    rainfall_signal >= thresholds$rainfall_signal_min
+  rain_bimodal <- rain_evidence & !is.na(valley_strength) &
+    valley_strength >= thresholds$valley_strength_min
+  ndvi_bimodal <- ndvi_evidence &
+    !is.na(bimodal_year_coverage) &
+    bimodal_year_coverage >= thresholds$bimodal_year_coverage_min &
+    !is.na(rainfall_signal) & rainfall_signal >= thresholds$rainfall_signal_floor
+  bimodal_supported <- rain_bimodal | ndvi_bimodal
+  season_supported <- season_id == 1L | (season_id == 2L & bimodal_supported)
+
+  pathway <- rep("not_identifiable", n)
+  pathway[!enough_years] <- "insufficient_data"
+  pathway[enough_years & season_supported & rain_evidence] <- "rainfall_proxy"
+  pathway[enough_years & season_supported & ndvi_evidence] <- "ndvi_seasonal"
+
+  data.frame(
+    baseline_pathway = factor(
+      pathway,
+      levels = c("ndvi_seasonal", "rainfall_proxy", "not_identifiable", "insufficient_data")
+    ),
+    ndvi_evidence = ndvi_evidence,
+    rainfall_evidence = rain_evidence,
+    bimodal_supported = bimodal_supported,
+    season_supported = season_supported
+  )
+}
+
+classify_annual_pathway <- function(
+    baseline_pathway,
+    season_id,
+    quality_event,
+    bimodal_supported,
+    detected_seasons,
+    wet_anomaly,
+    wet_anomaly_min) {
+  baseline_pathway <- as.character(baseline_pathway)
+  out <- baseline_pathway
+  out[baseline_pathway == "ndvi_seasonal" & quality_event] <- "ndvi_event"
+  out[baseline_pathway == "ndvi_seasonal" & !quality_event] <- "missing_ndvi_event"
+
+  wet_merged <- season_id == 2L & bimodal_supported & !quality_event &
+    !is.na(detected_seasons) & detected_seasons < 2L &
+    !is.na(wet_anomaly) & wet_anomaly >= wet_anomaly_min
+  out[wet_merged] <- "wet_merged"
+
+  factor(
+    out,
+    levels = c(
+      "ndvi_event", "rainfall_proxy", "wet_merged", "missing_ndvi_event",
+      "not_identifiable", "insufficient_data"
+    )
+  )
+}

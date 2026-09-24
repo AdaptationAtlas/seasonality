@@ -76,3 +76,10 @@
 - Status: accepted
 - Decision: Assign every fitted greenup event to its fixed baseline rainfall window, then select one event per pixel-year-window using completeness, fit quality, and distance from the baseline rainfall peak. Preserve source season label and duplicate count.
 - Reason: Raw fitted season numbers are not stable. In some counties raw season 1 is the October event while raw season 2 is the March event, causing label swaps and invalid long/short-rains comparisons.
+
+## D012 — Use conservative provisional detectability pathways
+
+- Date: 2026-09-24
+- Status: proposed; requires panel review and further validation
+- Decision: Combine NDVI amplitude, stable event coverage, timing concentration, rainfall harmonic strength, dry-valley strength, aridity regime, and bimodal event coverage. Apply a stricter NDVI amplitude requirement in humid pixels. Preserve `not_identifiable`, `missing_ndvi_event`, and `wet_merged` states.
+- Reason: All 13 CEEPA-discordant county-seasons are humid-dominant, but 25 humid-dominant county-seasons align within 30 days. Humidity alone is neither necessary nor sufficient; combined evidence separates failures while retaining supported humid seasons.

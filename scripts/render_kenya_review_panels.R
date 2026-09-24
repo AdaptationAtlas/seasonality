@@ -28,7 +28,7 @@ dir.create(panel_dir, recursive = TRUE, showWarnings = FALSE)
 sample_file <- file.path(report_dir, "review_sample.csv")
 detectability_file <- file.path(base_dir, "KEN_detectability_inputs.parquet")
 monthly_rain_file <- file.path(base_dir, "KEN_baseline_monthly_rainfall.parquet")
-phenology_file <- file.path(base_dir, "countries", "KEN_seasonal-phenology.parquet")
+phenology_file <- file.path(base_dir, "KEN_stable_phenology_events.parquet")
 windows_file <- file.path(base_dir, "KEN_candidate_season_windows.parquet")
 ndvi_dir <- file.path(data_root, "climate_raw", "glass_ndvi_tif")
 
@@ -86,17 +86,12 @@ rain[, rain_scaled := {
 
 pheno <- as.data.table(read_parquet(
   phenology_file,
-  col_select = c("pixel", "flag", "Greenup", "Senescence")
+  col_select = c("pixel", "year", "season_id", "Greenup", "Senescence", "season_detected", "fit_pass")
 ))[pixel %in% review_pixels]
-parts <- tstrsplit(pheno$flag, "_")
-pheno[, `:=`(
-  year = as.integer(parts[[1]]),
-  raw_season = as.integer(parts[[2]])
-)]
 event_climatology <- pheno[
-  !is.na(Greenup) & raw_season <= config$phenology$max_seasons,
+  season_detected == TRUE & fit_pass == TRUE,
   .(greenup_median_doy = as.numeric(median(as.integer(format(Greenup, "%j")), na.rm = TRUE))),
-  by = .(pixel, raw_season)
+  by = .(pixel, season_id)
 ]
 
 windows <- as.data.table(read_parquet(windows_file))[pixel %in% review_pixels]
@@ -116,7 +111,7 @@ annual <- as.data.table(read_parquet(detectability_file))[
   pixel %in% review_pixels
 ]
 annual <- annual[review[, .(pixel, review_stratum)], on = .(pixel), allow.cartesian = TRUE]
-annual <- annual[raw_season == fifelse(
+annual <- annual[season_id == fifelse(
   review_stratum == "wet_missing_season2", 2L, 1L
 )]
 
@@ -157,7 +152,7 @@ for (stratum in strata) {
     ) +
     geom_vline(
       data = event_s,
-      aes(xintercept = greenup_median_doy, colour = factor(raw_season)),
+      aes(xintercept = greenup_median_doy, colour = factor(season_id)),
       linewidth = 0.55, linetype = "dashed"
     ) +
     facet_wrap(~facet_label, ncol = 4) +
@@ -202,7 +197,7 @@ for (stratum in strata) {
 }
 
 review_sheet <- unique(review[, .(
-  review_stratum, pixel, admin1_name, x, y, raw_season,
+  review_stratum, pixel, admin1_name, x, y, season_id,
   ndvi_amplitude_median, event_coverage, timing_concentration,
   baseline_rainfall_signal, valley_strength,
   suggested_label = NA_character_,

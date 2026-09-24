@@ -13,10 +13,10 @@ Decision-ready Kenya admin1/admin2 time series describing onset, end, season len
 | P0.1 | DONE | Repository and data audit | Code, Git, Kenya inputs, and known defects documented |
 | P0.2 | DONE | AI project scaffolding | `AGENTS.md`, config, worklog, decisions, preflight, tests, JSONL logging |
 | P0.3 | TODO | Dependency lock | `renv.lock` restores clean environment without `pacman` auto-install |
-| P1.1 | IN PROGRESS | Kenya detectability classifier | NDVI/rainfall builders, combined calibration table, and pathway function added; thresholds require calibration/validation |
-| P1.2 | IN PROGRESS | Stable Kenya season windows | Circular rainfall windows and stable event reassignment built; bimodal acceptance threshold still requires calibration |
-| P1.3 | TODO | Phenology estimator | Source-aware dates plus confidence; no forced dates for aseasonal pixels |
-| P1.4 | IN PROGRESS | Independent validation | CEEPA 2003 comparison built for 61 well-supported county-seasons; next review humid/western outliers and score by ecological regime |
+| P1.1 | IN PROGRESS | Kenya detectability classifier | Stable-season provisional classifier built; thresholds require human panel review before acceptance |
+| P1.2 | IN PROGRESS | Stable Kenya season windows | Circular windows, stable event reassignment, and provisional bimodal support built; final threshold review remains |
+| P1.3 | IN PROGRESS | Phenology estimator | Source pathways and no-date states built; rainfall-proxy onset/end estimator and confidence score remain |
+| P1.4 | IN PROGRESS | Independent validation | CEEPA comparison and ecological diagnostics built; all 13 discordant county-seasons are humid-dominant and flagged conservatively |
 | P2.1 | TODO | Historical indicators | Annual onset/end/length plus baseline quantiles, variability, min/max, and robust trends |
 | P2.2 | DONE | Admin2 boundaries | Replaced corrupt XML response with validated Parquet: 4,596 Africa rows, 290 Kenya rows |
 | P2.3 | TODO | Admin1/admin2 aggregation | Area-aware summaries, coverage, confidence, and method composition |

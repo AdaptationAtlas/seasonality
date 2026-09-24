@@ -27,13 +27,15 @@ Audit date: 2026-09-24. Root: `/Volumes/clim_dat` (override with `ANALOGUE_DATA_
 ## Kenya recovery derivatives
 
 - `KEN_annual_signal_metrics.parquet`: annual NDVI amplitude, coverage, and event counts.
-- `KEN_baseline_season_signal_metrics.parquet`: baseline event coverage and circular timing concentration by candidate season.
+- `KEN_baseline_season_signal_metrics.parquet`: legacy raw-season diagnostics retained for provenance; stable products no longer use raw season labels.
 - `KEN_monthly_rainfall.parquet`: CHIRPS monthly totals for 2000–2024.
 - `KEN_annual_rainfall_metrics.parquet`: annual rainfall total, Walsh–Lawler seasonality, first/second harmonics, and robust wet anomaly.
 - `KEN_baseline_monthly_rainfall.parquet`: monthly rainfall climatology.
-- `KEN_detectability_inputs.parquet`: joined pixel-season-year calibration features including aridity, elevation, land cover, and total mapped crop activity.
 - `KEN_candidate_season_windows.parquet`: two candidate rainfall peaks and fixed circular month windows per pixel, with valley-strength diagnostic.
 - `KEN_stable_phenology_events.parquet`: fitted events relabelled into fixed baseline rainfall windows; includes explicit missing seasons and duplicate-candidate counts.
+- `KEN_detectability_inputs.parquet`: 912,700 unique stable pixel-year-season rows for 18,254 pixels; includes raw provenance, stable-event quality, NDVI/rainfall evidence, and environmental context.
+- `KEN_baseline_detectability.parquet`: provisional baseline pathway, evidence flags, and bimodal-support status for each stable pixel-season.
+- `KEN_detectability_classes.parquet`: annual `ndvi_event`, `rainfall_proxy`, `wet_merged`, missing-event, and non-identifiable classifications.
 - `independent_validation/KEN_ceepa_crop_observations.parquet`: decoded Kenya household crop planting/harvest observations with precision and eligibility flags.
 - `independent_validation/KEN_ceepa_crop_calendar_summary.parquet`: crop-calendar summaries by mapped current county, historical district, and named survey season.
 - `independent_validation/KEN_ceepa_remote_validation.*`: county-season comparison of 2003 CEEPA planting/harvest dates with stable GLASS greenup/senescence events.
@@ -54,6 +56,8 @@ Median R² remains high (0.933 in humid class). Conclusion: fitted-curve goodnes
 Raw annual NDVI audit adds second warning: correctly calendar-aligned median annual amplitude is 0.160 in humid pixels and 0.136 in arid pixels, versus 0.227–0.230 in semi-arid/sub-humid pixels. Low amplitude therefore occurs both in evergreen humid systems and sparsely vegetated arid systems. Classification must combine amplitude, timing concentration, event coverage, rainfall seasonality, and land cover; amplitude alone is unsafe.
 
 Initial independent comparison covers 61 county-seasons with at least 10 CEEPA observations and 10 quality-screened mapped-crop pixels. Median GLASS greenup occurs 10 days after reported planting; median absolute timing difference is 15.5 days. Remote quality-event coverage is 0.59 median. Larger western/humid discrepancies require targeted review rather than global threshold tuning. Planting-to-greenup lag and planting/harvest versus greenup/senescence definitions mean these are diagnostic differences, not interchangeable dates.
+
+Ecological diagnostics classify 13 county-seasons as discordant (at least 45 days difference); all 13 are humid-dominant. Their median provisional `not_identifiable` share is 1.00, showing multi-signal rules capture known failure cases. Humidity is not sufficient by itself: 25 humid-dominant county-seasons remain aligned within 30 days.
 
 ## Known integrity concerns
 

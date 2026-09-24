@@ -103,6 +103,42 @@ assert_equal(
   c(25, -25)
 )
 
+baseline_classes <- classify_baseline_signal(
+  season_id = c(1L, 1L, 2L, 2L),
+  aridity_bin = c("semi-arid", "humid", "sub-humid", "humid"),
+  years_with_ndvi = rep(25L, 4),
+  ndvi_amplitude = c(0.25, 0.10, 0.22, 0.10),
+  event_coverage = c(0.6, 0.2, 0.6, 0.2),
+  timing_concentration = c(0.9, 0.5, 0.9, 0.5),
+  rainfall_signal = c(0.5, 0.2, 0.4, 0.2),
+  valley_strength = c(0.6, 0.2, 0.4, 0.2),
+  bimodal_year_coverage = c(0.5, 0.1, 0.5, 0.1),
+  thresholds = list(
+    min_years_with_ndvi = 20, ndvi_amplitude_min = 0.15,
+    humid_ndvi_amplitude_min = 0.20, event_coverage_min = 0.40,
+    timing_concentration_min = 0.80, rainfall_signal_min = 0.35,
+    rainfall_signal_floor = 0.25, valley_strength_min = 0.30,
+    bimodal_year_coverage_min = 0.30
+  )
+)
+assert_equal(
+  as.character(baseline_classes$baseline_pathway),
+  c("ndvi_seasonal", "not_identifiable", "ndvi_seasonal", "not_identifiable")
+)
+annual_classes <- classify_annual_pathway(
+  baseline_pathway = c("ndvi_seasonal", "ndvi_seasonal", "rainfall_proxy"),
+  season_id = c(1L, 2L, 2L),
+  quality_event = c(TRUE, FALSE, FALSE),
+  bimodal_supported = c(TRUE, TRUE, TRUE),
+  detected_seasons = c(2L, 1L, 1L),
+  wet_anomaly = c(0, 3, 0),
+  wet_anomaly_min = 2.5
+)
+assert_equal(
+  as.character(annual_classes),
+  c("ndvi_event", "wet_merged", "rainfall_proxy")
+)
+
 glass_dates <- parse_glass_ndvi_dates(c(
   "GLASS13B01.V10.A2000001.2023068.tif",
   "GLASS13B01.V10.A2000365.2023068.tif"
