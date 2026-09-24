@@ -20,6 +20,8 @@
 - Built fixed-window candidates for 18,253 pixels. Dominant crop-pixel rainfall peaks are April/November. Dry-valley strength is much lower in humid crop pixels (~0.28 median) than arid crop pixels (~0.81), confirming peak count alone cannot define seasons.
 - Added calibration diagnostics: empirical quantiles, stratified review sample, wet/missing-season candidates, signal plots, and candidate map.
 - Generated balanced 48-pixel review sample (12 per diagnostic stratum) and 3,414 wet/missing-season candidate records across 1,423 pixels. Largest candidate counts occur in 2023, 2019, 2020, and 2006; these remain review candidates, not accepted classifications.
+- Added eight detailed review panels: seasonal NDVI/rainfall climatology and annual wet-anomaly/event histories for each diagnostic stratum. Added structured human review sheet; labels remain blank until review.
+- Visual QA exposed partial-year `as.Date()` behavior that shifted new GLASS dates to September-based years. Added strict `AYYYYDDD` parser and regression test; rebuilt all NDVI-dependent recovery derivatives. Rainfall products were unaffected.
 - Added final interactive viewer and deployment workstream to roadmap.
 
 Next: build/test Kenya detectability classifier and stable baseline season windows on representative regions.
