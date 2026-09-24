@@ -26,6 +26,7 @@ dirs <- list(
   srtm="static_raw/strm",
   soilgrids="static_raw/soilgrids",
   isda="static_raw/isda",
+  validation="static_raw/validation",
   glass_ndvi="climate_raw/glass_ndvi",
   glass_ndvi_tif="climate_raw/glass_ndvi_tif",
   nvdi_phenology="climate_derived/glass_phenology",

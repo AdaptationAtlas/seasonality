@@ -12,6 +12,7 @@ Audit date: 2026-09-24. Root: `/Volumes/clim_dat` (override with `ANALOGUE_DATA_
 | Pixel aridity/elevation | `climate_derived/glass_phenology/pixel_index_aridity_elevation.parquet` | 36 MB |
 | Africa admin1 boundaries | `static_raw/boundaries/atlas_gaul24_a1_africa_simple-highres.parquet` | Valid; 719 rows |
 | Africa admin2 boundaries | `static_raw/boundaries/atlas_gaul24_a2_africa_simple-highres.parquet` | Valid; 17 MB; 4,596 Africa rows; 290 Kenya rows |
+| CEEPA agricultural survey | `static_raw/validation/ceepa/CEEPA.zip` | Valid Figshare archive; MD5 verified; 9,597 Africa households, including 816 Kenya households in 44 historical districts |
 
 ## Main upstream stores
 
@@ -32,6 +33,8 @@ Audit date: 2026-09-24. Root: `/Volumes/clim_dat` (override with `ANALOGUE_DATA_
 - `KEN_baseline_monthly_rainfall.parquet`: monthly rainfall climatology.
 - `KEN_detectability_inputs.parquet`: joined pixel-season-year calibration features including aridity, elevation, land cover, and total mapped crop activity.
 - `KEN_candidate_season_windows.parquet`: two candidate rainfall peaks and fixed circular month windows per pixel, with valley-strength diagnostic.
+- `independent_validation/KEN_ceepa_crop_observations.parquet`: decoded Kenya household crop planting/harvest observations with precision and eligibility flags.
+- `independent_validation/KEN_ceepa_crop_calendar_summary.parquet`: crop-calendar summaries by mapped current county, historical district, and named survey season.
 
 ## Kenya audit signal
 

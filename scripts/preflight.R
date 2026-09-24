@@ -28,7 +28,7 @@ checks <- list(
 )
 
 required_packages <- c(
-  "arrow", "data.table", "DBI", "duckdb", "ggplot2", "jsonlite", "lubridate", "terra"
+  "arrow", "data.table", "DBI", "duckdb", "ggplot2", "haven", "jsonlite", "lubridate", "terra"
 )
 package_checks <- setNames(
   vapply(required_packages, requireNamespace, logical(1), quietly = TRUE),

@@ -62,3 +62,10 @@
 - Status: accepted
 - Decision: Build interactive viewer only after annual indicators, confidence fields, and admin aggregation schemas stabilize. Viewer must use derived products, not scan raw climate archives.
 - Reason: Separating computation from presentation keeps viewer responsive, reproducible, and cheap to deploy while preventing UI choices from shaping scientific methods.
+
+## D010 — Treat CEEPA as independent event validation, not trend evidence
+
+- Date: 2026-09-24
+- Status: accepted
+- Decision: Use CEEPA Kenya crop-specific planting and harvest observations to validate 2003/04 onset and season length at mapped county/historical-district scale. Preserve reported date precision; exclude unparsed, continuous/perennial, and clearly out-of-period records from primary scores.
+- Reason: Survey provides broad crop and ecological coverage but only one agricultural year and no household coordinates. It can test event timing and coverage, not historical trends or pixel accuracy.

@@ -22,6 +22,7 @@
 - Generated balanced 48-pixel review sample (12 per diagnostic stratum) and 3,414 wet/missing-season candidate records across 1,423 pixels. Largest candidate counts occur in 2023, 2019, 2020, and 2006; these remain review candidates, not accepted classifications.
 - Added eight detailed review panels: seasonal NDVI/rainfall climatology and annual wet-anomaly/event histories for each diagnostic stratum. Added structured human review sheet; labels remain blank until review.
 - Visual QA exposed partial-year `as.Date()` behavior that shifted new GLASS dates to September-based years. Added strict `AYYYYDDD` parser and regression test; rebuilt all NDVI-dependent recovery derivatives. Rainfall products were unaffected.
+- Downloaded checksum-verified CEEPA survey archive from Figshare and decoded 816 Kenya households across 44 historical districts. Added reproducible downloader, crop/date parser, county crosswalk, and independent planting/harvest validation products. Single-year district-level evidence is reserved for event validation, not trend inference.
 - Added final interactive viewer and deployment workstream to roadmap.
 
 Next: build/test Kenya detectability classifier and stable baseline season windows on representative regions.

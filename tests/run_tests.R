@@ -7,6 +7,7 @@ source("R/functions/detectability.R")
 source("R/functions/rainfall_seasonality.R")
 source("R/functions/season_windows.R")
 source("R/functions/ndvi_dates.R")
+source("R/functions/ceepa_validation.R")
 
 assert_equal <- function(actual, expected, tolerance = 1e-8) {
   if (!isTRUE(all.equal(actual, expected, tolerance = tolerance))) {
@@ -100,6 +101,26 @@ glass_dates <- parse_glass_ndvi_dates(c(
 assert_equal(
   as.character(glass_dates),
   c("2000-01-01", "2000-12-30")
+)
+
+ceepa_dates <- parse_ceepa_calendar_dates(c(
+  "15mar03", "ddapr03", "w2oct03", "ddsept03", "continous", "ddmon90", NA
+))
+assert_equal(
+  ceepa_dates$doy,
+  c(74L, 105L, 284L, 258L, NA_integer_, NA_integer_, NA_integer_)
+)
+assert_equal(
+  ceepa_dates$precision,
+  c("day", "month", "week", "month", NA_character_, NA_character_, NA_character_)
+)
+assert_equal(
+  ceepa_dates$parse_status,
+  c("parsed", "parsed", "parsed", "parsed", "continuous", "unparsed", "missing")
+)
+assert_equal(
+  ceepa_current_county(c("TRNASNZOIA", "meru north", "NITHI")),
+  c("Trans Nzoia", "Meru", "Tharaka-Nithi")
 )
 
 cat("All tests passed.\n")
